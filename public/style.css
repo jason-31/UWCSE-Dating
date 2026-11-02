@@ -80,7 +80,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 64px; }
 .header-right { display: flex; gap: 14px; align-items: center; min-width: 0; }
 .lang-switch {
   padding: 3px 10px; font-size: 13px; background: transparent; color: #fff;
-  border: 1px solid var(--lavender); border-radius: 999px;
+  border: 1px solid var(--lavender); border-radius: 999px; white-space: nowrap; flex-shrink: 0;
 }
 .lang-switch:hover:not(:disabled) { border-color: var(--spirit); }
 
@@ -144,6 +144,19 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 /* Home: challenges left, the user's browsable lists right; stacked on narrow screens. */
 .home { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); align-items: start; }
 @media (max-width: 760px) { .home { grid-template-columns: minmax(0, 1fr); } }
+/* Phones: the header takes two rows (brand, then links and the language switch); links wrap
+   and the signed-in email gets a line of its own. */
+@media (max-width: 640px) {
+  .site-header { flex-wrap: wrap; row-gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+  .brand { font-size: 17px; }
+  .brand img { width: 30px; height: 30px; }
+  .header-right { flex: 1 1 100%; justify-content: space-between; align-items: flex-start; }
+  #whoami { flex-wrap: wrap; column-gap: 14px; row-gap: 2px; }
+  #whoami .muted { flex-basis: 100%; order: 1; }
+  /* All of a challenge's tabs fit on one row instead of scrolling out of sight. */
+  .tabs { gap: 0; }
+  .tabs a { padding: 8px 9px; font-size: 14px; }
+}
 .home-col h1 { font-size: 24px; }
 .people { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .relation-group { border-top: 4px solid var(--gold); }

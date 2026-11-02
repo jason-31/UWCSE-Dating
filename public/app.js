@@ -127,7 +127,7 @@ async function renderRegister() {
     "div",
     { class: "terms" },
     h("h3", {}, t("site_rules")),
-    h("ul", { class: "rules" }, h("li", {}, t("rule1")), h("li", {}, t("rule2")), h("li", {}, t("rule3"))),
+    h("ul", { class: "rules" }, ["rule1", "rule2", "rule3", "rule4"].map((r) => h("li", {}, t(r)))),
     // Opens in a new tab so the form being filled in is kept.
     h("p", { class: "muted small" }, t("privacy_pre"), h("a", { href: "/#/privacy", target: "_blank", rel: "noopener" }, t("privacy_link")), t("privacy_post")),
     h("label", { class: "check" }, accept, t("accept_rules")),

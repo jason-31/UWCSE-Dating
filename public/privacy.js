@@ -35,7 +35,7 @@ const CONTENT = {
         h: "谁能看到什么",
         p: [
           "其他成员：只有和你在同一期名单上、在这个挑战里和你至少有一种共同寻找的关系、并且双方都满足对方筛选条件的人，才能看到你的卡片。卡片上总会有头像、昵称、性别、项目和学校邮箱；研究兴趣和简介填了就显示；微信和 Discord 只向你选择的关系显示；每段“期待”只向同样寻找那种关系的人显示。",
-          "筛选是双向的：能在某种关系下看到你的人，会知道你在这种关系上接受他们的性别和项目。对约会来说，这可能透露你的性取向。",
+          "筛选是双向的：能在某种关系下看到你的人，会知道你在这种关系上接受他们的性别和项目。对恋爱来说，这可能透露你的性取向。",
           "首页会把你在各个挑战里能看到的人合并显示，不标明来源；但如果你只在一个挑战里寻找某种关系，在首页这种关系下看到你的人，能推断出你们是在那个挑战里遇到的。",
           "能看到你卡片的人可以截图或记下你的信息，我们无法阻止。",
           "网站运营者：本站没有任何查看资料的后台或接口，日志也不记录个人信息。但运营者控制网站的部署，可以修改并上线新代码，而新代码能读到解密后的数据。按规定，部署只通过公开仓库里的自动化流程进行，但目前还没有独立的第三方核对每一次上线是否都来自这个流程。运营者能看到上面说的元数据，也能封禁账号。",
@@ -103,7 +103,7 @@ const CONTENT = {
         h: "Who can see what",
         p: [
           "Other members: only people on the same period's list as you, who share at least one relationship type you are looking for in that challenge, and who pass each other's filters, can see your card. It always shows your avatar, nickname, gender, program and school email; research interests and bio when you fill them in; WeChat and Discord only to the relationship types you choose; and each note on what you hope for only to people looking for that same type.",
-          "Filters work both ways: anyone who can see you under a relationship type learns that you accept their gender and program for it. For dating, this can reveal your sexual orientation.",
+          "Filters work both ways: anyone who can see you under a relationship type learns that you accept their gender and program for it. For a romantic relationship, this can reveal your sexual orientation.",
           "The home page merges the people you can see in every challenge without saying where you met them. But if you look for a type in only one challenge, someone who sees you under that type on the home page can tell which challenge it was.",
           "People who can see your card can take screenshots or note down what it says; we cannot prevent that.",
           "The site operator: there is no admin page or endpoint that shows profiles, and logs never contain personal data. But the operator controls deployment and could put new code online, and new code could read decrypted data. Deployments are meant to happen only through the automated process in the public repository, but nobody independent checks yet that every deployment did. The operator can see the metadata described above and can ban accounts.",

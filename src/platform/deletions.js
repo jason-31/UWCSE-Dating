@@ -5,7 +5,7 @@ import { vault } from "./vault.js";
 // Deleting an account and registering again must not reset the profile change locks (relations
 // and filters: 7 days; nickname, gender, program, avatar: 30 days). Otherwise one member could
 // register as each gender in turn and, through the two-way ROMANCE filters, learn which genders
-// every dating member accepts. So deleting an account records a tombstone until its locks would
+// every member seeking romance accepts. So deleting an account records a tombstone until its locks would
 // have expired, and registration with that email is refused until then.
 //
 // A tombstone holds only a keyed hash of the email (src/platform/vault.js, its own purpose, so it
