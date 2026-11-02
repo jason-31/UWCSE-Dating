@@ -30,8 +30,8 @@ One profile per person, shared by every challenge. Challenges never collect pers
 | Research interests, bio | Optional, length at most 240 and 600 | Always, when filled in |
 
 - **Length** of the free-text fields is weighted: letters and digits count 1, Chinese and other full-width characters (and emoji) count 2. A Chinese and an English text at the limit say about as much and take about as much room on a card.
-- **Change locks.** What you are looking for and your filters share one lock: after either changes, neither can change again for 7 days. Nickname, gender, program and avatar share another lock of 30 days. Both start at registration, and a lock only restarts when a field in its group actually changes. Other fields can change at any time.
-- **Avatar uploads.** The browser crops the image to a centred square, scales it to 256×256 and re-encodes it, which also strips metadata such as location. The server identifies the format from the bytes (PNG, JPEG or WebP; never SVG), requires exactly 256×256 and at most 512 KB, and allows 5 upload attempts per email in any 30 days, failed ones included. Uploads are refused while the 30-day lock runs, since they could not be saved. A profile can only use its owner's upload; only the upload in use and the latest unsaved one are kept.
+- **Change locks.** What you are looking for and your filters share one lock: after either changes, neither can change again for 7 days. Nickname, gender and program share another lock of 30 days. The avatar is not locked: choosing one is free at any time. Both start at registration, and a lock only restarts when a field in its group actually changes. Other fields can change at any time.
+- **Avatar uploads.** The browser crops the image to a centred square, scales it to 256×256 and re-encodes it, which also strips metadata such as location. The server identifies the format from the bytes (PNG, JPEG or WebP; never SVG), requires exactly 256×256 and at most 512 KB, and allows 5 upload attempts per email in any 30 days, failed ones included. A profile can only use its owner's upload. The upload in use and the latest upload are kept (the latest even while unused), so switching between presets and one's own photo never costs an upload.
 - Profiles persist until changed or deleted. Nobody is asked to confirm anything daily.
 
 ## Who sees whom
@@ -84,7 +84,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 
 - Everything personal is encrypted at rest (see [oversight.md](oversight.md), rule 5).
 - History that people see as theirs (check-ins, completions, list memberships) is kept until they delete it.
-- The daily clean-up deletes: expired sessions (30 days after sign-in); uploads no profile uses, after a day; LeetCode verification attempts after 7 days; binding tokens once expired; upload-attempt counts after 30 days; deletion tombstones once the locks they protect have expired.
+- The daily clean-up deletes: expired sessions (30 days after sign-in); uploads no profile uses, after a day (except a registered person's latest upload); LeetCode verification attempts after 7 days; binding tokens once expired; upload-attempt counts after 30 days; deletion tombstones once the locks they protect have expired.
 
 ## Deliberately not built
 
@@ -119,7 +119,7 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A22 | Relations or filters changed again within 7 days | Refused with the time they can change; other fields still save |
 | A23 | A's romance filter: women, BS or BS/MS; B: a woman in the PhD program; both seek friendship and romance | They see each other under friendship only |
 | A24 | B chose "prefer not to say"; A's romance filter has only women | Not visible to each other under romance until A also ticks "prefer not to say" |
-| A25 | Avatar changed, then nickname, gender or program within 30 days | Refused with the time it can change; relations, contacts and "about me" still save |
+| A25 | Nickname changed, then gender or program within 30 days | Refused with the time it can change; avatar, relations, contacts and "about me" still save |
 | A26 | Upload attempts beyond 5 in 30 days, or deleting the upload or account in between | Refused with the date of the next allowed upload; deleting restores nothing |
 | A27 | An account is deleted and registered again with the same email | Refused until the deleted profile's locks would have expired |
 | A28 | Someone is banned | Within five minutes they can only sign out or delete their data, and their card is gone from every list |
@@ -128,5 +128,6 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A31 | "Join this period's list automatically" is ask, never or always | Ask: nobody is listed or left off without an answer; never: completing the task never lists anyone, joining by hand still works; always: completing the task lists them |
 | A32 | A seeks friendship and romance, but only friendship in the Daily Check-in and only romance in LeetCode Daily; B seeks both everywhere | In the check-in list they see each other under friendship only, in LeetCode under romance only; on the home page under both |
 | A33 | A per-challenge choice with no relation, or with one not in the profile | Refused |
+| A34 | Someone switches from their uploaded photo to a preset and back, any number of times | Always allowed and costs no upload; the photo is kept |
 
 A LeetCode-backed launch also needs the positive and failure cases above run against the real data source; mocks alone do not show that completions can be verified.

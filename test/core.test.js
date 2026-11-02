@@ -280,17 +280,18 @@ test("only WeChat and Discord have per-relation visibility; email and about-me a
   assert.deepEqual(card.fields, {});
 });
 
-test("basic info shares a 30-day lock, separate from relations and filters", () => {
+test("nickname, gender and program share a 30-day lock; the avatar is not locked", () => {
   const p = validateProfile({ nickname: "x", gender: "MALE", program: "PHD", avatar: "male", relations: ["STUDY"] }, cfg);
   const day = 86400_000;
   const now = Date.UTC(2026, 10, 1);
   const current = { ...p, matching_changed_at: now - 60 * day, basic_changed_at: now - 10 * day };
-  for (const change of [{ nickname: "y" }, { gender: "FEMALE" }, { program: "PMP" }, { avatar: "female" }]) {
+  for (const change of [{ nickname: "y" }, { gender: "FEMALE" }, { program: "PMP" }]) {
     assert.throws(
       () => checkLockedChanges(current, { ...p, ...change }, cfg, now),
       (e) => e.code === "basic_locked" && e.extra.basic_locked_until === now + 20 * day,
     );
   }
+  checkLockedChanges(current, { ...p, avatar: "female" }, cfg, now); // the avatar can change any time
   checkLockedChanges(current, { ...p, relations: ["FRIENDSHIP"] }, cfg, now); // matching lock expired
   checkLockedChanges({ ...current, basic_changed_at: now - 31 * day }, { ...p, nickname: "y" }, cfg, now);
 });

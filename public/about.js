@@ -35,7 +35,7 @@ const CONTENT = {
           "每个挑战还可以单独选择在这里寻找哪几种关系（只能从你资料里选的关系中选），比如靠每日签到交朋友、恋爱只通过 LeetCode。在某个挑战里，双方都在这里寻找同一种关系，才会以这种关系互相看到。",
           "你只会看到和你至少有一种共同关系的人，对方也一样。比如 A 寻找朋友和恋爱、B 只寻找朋友、C 只寻找恋爱：A 和 B 以朋友身份互相可见，A 和 C 以恋爱身份互相可见，B 和 C 互相看不到。",
           "每种关系还可以按性别和项目筛选，默认全选、不做限制，取消勾选来缩小范围，比如恋爱只保留某些项目的女生。筛选是双向的：你也要符合对方的条件，你们才会互相看到；筛选只看对方卡片上本来就显示的性别和项目。也因为是双向的，能在某种关系下看到你的人会知道你在这种关系上接受他们的性别；对恋爱来说，这可能透露你的性取向。性别由每个人自己填写。",
-          "为了避免为了看到更多人而频繁切换，寻找的关系和筛选条件共用一个计时，改动保存后 7 天内都不能再改。基本信息（昵称、性别、项目、头像）另有一个计时，改动后 30 天内不能再改。",
+          "为了避免为了看到更多人而频繁切换，寻找的关系和筛选条件共用一个计时，改动保存后 7 天内都不能再改。昵称、性别和项目另有一个计时，改动后 30 天内不能再改。头像可以随时换，只有上传新头像有次数限制（每 30 天 5 次）。",
         ],
       },
       {
@@ -96,7 +96,7 @@ const CONTENT = {
           "Each challenge also lets you choose which of those you look for there (only from the ones in your profile): for example, make friends through the Daily Check-in and look for a relationship only through LeetCode. In a challenge, two people see each other under a type only if both look for it there.",
           "You only see people who share at least one of those with you, and the same goes for them. Say A wants friendship and romance, B only friendship and C only romance: A and B see each other as friends, A and C see each other for romance, and B and C don't see each other at all.",
           "For each relationship type you can also filter by gender and program. Everything is ticked by default (no restriction); untick to narrow it, e.g. a romantic relationship only with women in certain programs. Filters work both ways: you have to meet theirs too, and it only looks at the gender and program already shown on everyone's card. Because filters are two-way, anyone who can see you under a relationship learns that you accept their gender for it; for a romantic relationship, this can reveal your sexual orientation. Gender is self-reported.",
-          "So nobody keeps switching just to see more people, what you're looking for and your filters share one timer: after you save a change, neither can be changed again for 7 days. Basic info (nickname, gender, program, avatar) has its own timer of 30 days.",
+          "So nobody keeps switching just to see more people, what you're looking for and your filters share one timer: after you save a change, neither can be changed again for 7 days. Nickname, gender and program have their own timer of 30 days. Your avatar can change any time; only uploading a new one is limited (5 times every 30 days).",
         ],
       },
       {

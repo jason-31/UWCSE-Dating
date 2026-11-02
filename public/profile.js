@@ -4,11 +4,11 @@ import { textWeight } from "/text-weight.js";
 
 // Site-wide profile form. The email is the sign-in email: read-only and always on the card.
 // onSubmit(values) returns a promise; extra nodes are rendered just above the submit button.
-export function profileForm({ schema, profile, email, title, intro, submitLabel, extra = [], lockedUntil = {}, onSubmit }) {
+export function profileForm({ schema, profile, email, title, intro, submitLabel, extra = [], lockedUntil = {}, latestUpload = null, onSubmit }) {
   // Relations sought and filters share one change lock.
   const matchingLockedUntil = lockedUntil.matching || 0;
   const matchingLocked = matchingLockedUntil > Date.now();
-  // Basic info (nickname, gender, program, avatar) has its own, longer lock.
+  // Nickname, gender and program have their own, longer lock. The avatar is not locked.
   const basicLockedUntil = lockedUntil.basic || 0;
   const basicLocked = basicLockedUntil > Date.now();
   const p = profile || {
@@ -28,11 +28,14 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
   const spec = Object.fromEntries(schema.fields.map((f) => [f.name, f]));
   const noteMax = spec.relation_notes.max;
 
-  // Presets plus the user's own upload (if any). Uploads are cropped to a centred square and
-  // re-encoded in the browser, which also strips metadata such as EXIF location.
+  // Presets plus the user's uploads the server keeps: the one in use and the latest one, so
+  // switching between them is free (only uploading counts against the limit). Uploads are
+  // cropped to a centred square and re-encoded in the browser, which also strips metadata such
+  // as EXIF location.
   const avatarPicker = h("div", { class: "avatar-picker" });
   const options = schema.avatars.map((a) => ({ id: a.id, url: a.url }));
   if (p.avatar?.startsWith("upload:")) options.push({ id: p.avatar, url: p.avatar_url });
+  if (latestUpload && latestUpload.avatar !== p.avatar) options.push({ id: latestUpload.avatar, url: latestUpload.url });
   const fileInput = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: true });
   const uploadBtn = h("button", { type: "button", class: "avatar-upload" }, t("upload_avatar"));
   uploadBtn.onclick = () => fileInput.click();
@@ -52,8 +55,10 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
       check.close();
       if (!ok) throw new Error(t("image_unreadable"));
       const res = await apiUpload("/api/avatars", blob);
-      const i = options.findIndex((o) => o.id.startsWith("upload:"));
-      if (i >= 0) options.splice(i, 1);
+      // The server now keeps the upload in use and this new one; any other is gone.
+      for (let i = options.length - 1; i >= 0; i--) {
+        if (options[i].id.startsWith("upload:") && options[i].id !== p.avatar) options.splice(i, 1);
+      }
       options.push({ id: res.avatar, url: res.url });
       state.avatar = res.avatar;
       renderAvatars();
@@ -73,7 +78,6 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
           {
             type: "button",
             class: a.id === state.avatar ? "avatar-opt selected" : "avatar-opt",
-            disabled: basicLocked && a.id !== state.avatar,
             title: a.id.startsWith("upload:") ? t("my_upload") : a.id,
             onclick: () => {
               state.avatar = a.id;
@@ -83,7 +87,7 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
           h("img", { src: a.url, alt: "" }),
         ),
       ),
-      !basicLocked && uploadBtn,
+      uploadBtn,
       fileInput,
     );
   }
@@ -261,7 +265,7 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
       field(
         t("f_avatar"),
         avatarPicker,
-        !basicLocked && h("p", { class: "muted small" }, t("upload_limit_hint", { n: schema.avatar_upload.max_attempts, days: schema.avatar_upload.window_days })),
+        h("p", { class: "muted small" }, t("upload_limit_hint", { n: schema.avatar_upload.max_attempts, days: schema.avatar_upload.window_days })),
       ),
       field(t("f_email"), h("div", { class: "readonly" }, email), h("p", { class: "muted small" }, t("email_fixed"))),
     ),

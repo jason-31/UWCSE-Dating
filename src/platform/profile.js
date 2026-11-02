@@ -289,11 +289,13 @@ const LOCKS = {
     fields: ["relations", "relation_filters"],
     message: (d) => L(`寻找的关系和筛选条件每 ${d} 天只能修改一次`, `What you're looking for and your filters can only be changed once every ${d} days`),
   },
+  // The avatar is basic info (always on the card) but not locked: choosing one is free, and only
+  // uploads are limited (avatars.js).
   basic: {
     column: "basic_changed_at",
     days: "basic_change_cooldown_days",
-    fields: ["nickname", "gender", "program", "avatar"],
-    message: (d) => L(`基本信息每 ${d} 天只能修改一次`, `Basic info can only be changed once every ${d} days`),
+    fields: ["nickname", "gender", "program"],
+    message: (d) => L(`昵称、性别和项目每 ${d} 天只能修改一次`, `Nickname, gender and program can only be changed once every ${d} days`),
   },
 };
 
