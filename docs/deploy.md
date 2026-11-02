@@ -8,8 +8,8 @@ Steps that cannot live in code and must be done (or checked) when deploying to C
 - [x] **D1 location.** (Checked 2026-11-01: `running_in_region` WNAM.) Check `wrangler d1 info uwcse-date-db`. If the primary is not in `wnam` (western North America), recreate the database with `--location=wnam` while it is still empty; every request makes several sequential D1 round trips.
 - [x] **Hostnames.** (2026-11-01: served only at `uwcse.date`, behind Cloudflare Access; workers.dev and preview URLs off.) Add the custom domain as `"routes": [{ "pattern": "<domain>", "custom_domain": true }]` and set `"workers_dev": false` and `"preview_urls": false`, so no second hostname bypasses zone rules or runs preview versions against production data.
 - [x] **Secrets.** (Set 2026-11-01.) `wrangler secret put GOOGLE_CLIENT_SECRET`. `GOOGLE_CLIENT_ID` can be a plain var.
-- [ ] **DATA_KEY** (encryption at rest, `src/platform/vault.js`). Without it every API request that touches personal data answers 503 `server_misconfigured`. Once the key-provisioning workflow exists (docs/oversight.md rule 6) it sets the key, so that nobody ever sees it. Until then, generate it so that it is never shown or saved: `openssl rand -base64 32 | npx wrangler secret put DATA_KEY`. Never change or delete it afterwards: every account, session and avatar would become unreadable. `ACCOUNT_KEY` is no longer used; remove it with `npx wrangler secret delete ACCOUNT_KEY`.
-- [ ] **Migrations.** (0001-0008 applied 2026-11-01.) `wrangler d1 migrations apply uwcse-date-db --remote`. **0009 and 0010 delete every account and its data** (they could not be converted to the encrypted form in SQL), so everyone registers again. Order: set `DATA_KEY`, apply the migrations, deploy right away (the old code fails against the new tables in between). Old avatar images left in R2 are deleted by the next daily clean-up. From now on migrations are append-only: never edit or rename an applied file.
+- [ ] **DATA_KEY** (encryption at rest, `src/platform/vault.js`). Without it every API request that touches personal data answers 503 `server_misconfigured`. Create it only with the Provision DATA_KEY workflow (below), so that nobody ever sees it. Never change or delete it afterwards: every account, session and avatar would become unreadable. `ACCOUNT_KEY` is no longer used.
+- [ ] **Migrations.** (0001-0008 applied 2026-11-01.) The deploy workflow applies the rest before each deployment. **0009 and 0010 delete every account and its data** (they could not be converted to the encrypted form in SQL), so everyone registers again; old avatar images left in R2 are deleted by the next daily clean-up. Migrations are append-only: never edit or rename an applied file.
 - [ ] **Rate limiting bindings.** The `ratelimits` entries in wrangler.jsonc need no setup, but confirm they are active on the deployed plan. Signed in on the site, run this in the browser console; the home-page list allows 30 requests a minute, so 429s should appear by the end (counts are per location and approximate):
 
   ```js
@@ -34,9 +34,13 @@ Steps that cannot live in code and must be done (or checked) when deploying to C
 
 ## Continuous deployment (GitHub Actions)
 
-Production is deployed only by the public CI workflow from the protected `main` branch (oversight.md rule 2). The workflows themselves (`deploy.yml`: test, apply migrations, deploy, print the deployed version; `provision-key.yml`: create `DATA_KEY` once without printing it) are still to be written.
+Production is deployed only by the public CI workflow from the protected `main` branch (oversight.md rule 2):
 
-- [ ] **Public repository.** Push to a public GitHub repository. Protect `main`: no force pushes, changes only through pull requests.
+- `.github/workflows/deploy.yml` runs on every push to `main` (or by hand): tests, then, in the `production` environment, a check that the Worker has `DATA_KEY`, the D1 migrations and `wrangler deploy`, whose log shows the deployed Version ID.
+- `.github/workflows/provision-key.yml`, run once by hand, creates `DATA_KEY` inside the run and pipes it into `wrangler secret put` without printing it. It refuses to run if the key already exists.
+
+- [x] **Public repository.** (2026-11-01: https://github.com/jason-31/UWCSE-Dating.)
+- [ ] **Protect `main`.** Repository → Settings → Rules → Rulesets (or Branches): for `main`, block force pushes and deletions and require changes through pull requests.
 - [ ] **Environment.** Repository → Settings → Environments → New environment `production`. Under "Deployment branches and tags", allow only `main`, so workflows on other branches and pull requests cannot read its secrets. Add the environment variable `CLOUDFLARE_ACCOUNT_ID` (the account ID is not a secret).
 - [ ] **Deploy token.** Cloudflare dashboard → Manage account → Account API tokens → Create Token, starting from the "Edit Cloudflare Workers" template. An account token does not depend on any one person's login. Keep exactly these permissions:
 
@@ -48,7 +52,7 @@ Production is deployed only by the public CI workflow from the protected `main` 
   | Zone `uwcse.date` | Workers Routes: Edit | the custom domain |
 
   Remove the template's KV, R2, Pages and Tail permissions. Account resources: this account only; zone resources: `uwcse.date` only; no IP filter (GitHub's runners have no fixed addresses); no expiry. Paste the token straight into the `production` environment as the secret `CLOUDFLARE_API_TOKEN` and keep no other copy. The D1 permission can also read the database, which is why only CI may hold this token; any workflow change that uses it is a public commit.
-- [ ] **First run.** If a permission is missing, the failing step names it. Then set `DATA_KEY` with `provision-key.yml` before merging the encrypted schema (migrations 0009 and 0010) into `main`.
+- [ ] **First run.** Actions → Provision DATA_KEY → Run workflow, then Actions → Deploy → Run workflow. The deploy applies migrations 0009 and 0010, which delete every account from before encryption. If a permission is missing, the failing step names it. Afterwards delete the unused `ACCOUNT_KEY` secret (Worker → Settings → Variables and secrets) and run `wrangler logout` locally.
 
 ## Operating
 

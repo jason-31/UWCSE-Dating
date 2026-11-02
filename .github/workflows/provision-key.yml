@@ -1,0 +1,46 @@
+# Creates the encryption key (DATA_KEY) inside this run and hands it straight to Cloudflare as a
+# Worker secret. It is never printed or written anywhere else, and Cloudflare never shows a
+# secret again, so nobody holds it (docs/oversight.md rule 6). Run it once, by hand, before the
+# first deployment of the encrypted schema.
+#
+# It refuses to run when the Worker already has a DATA_KEY: a new key would make every account,
+# profile, session and avatar unreadable. The audit log shows every change to the secret.
+name: Provision DATA_KEY
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Refuse if DATA_KEY already exists
+        run: |
+          npx wrangler secret list --format json > "$RUNNER_TEMP/secrets.json"
+          node -e '
+            const names = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map((s) => s.name);
+            if (names.includes("DATA_KEY")) {
+              console.log("::error::The Worker already has a DATA_KEY. Replacing it would make all stored data unreadable.");
+              process.exit(1);
+            }
+          ' "$RUNNER_TEMP/secrets.json"
+      # 32 random bytes, base64-encoded, piped directly into wrangler (never echoed).
+      - name: Create DATA_KEY
+        run: openssl rand -base64 32 | npx wrangler secret put DATA_KEY
