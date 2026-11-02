@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local development.
+DEV_MODE=1
+DEV_USER_EMAIL=you@cs.washington.edu
+# "mock" fakes LeetCode locally: any profile token passes; usernames ending in _ac have today's AC.
+LEETCODE_PROVIDER=mock
+# Production needs DATA_KEY (the base64 of 32+ random bytes; see docs/deploy.md). With DEV_MODE on
+# localhost a fixed development key is used, so it can stay unset here.
+# DATA_KEY=

@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.dev.vars
+# Original artwork for the preset avatars; the site serves the versions in public/avatars/.
+assets/

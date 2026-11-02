@@ -1,0 +1,20 @@
+{
+  "name": "uwcse-date",
+  "version": "1.0.0",
+  "description": "UWCSE.date: academic challenges with verified completion lists",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "dev": "wrangler dev --port 8787 --local-upstream localhost:8787",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply uwcse-date-db --local",
+    "ban": "node scripts/ban.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "devDependencies": {
+    "wrangler": "^4.156.0"
+  }
+}

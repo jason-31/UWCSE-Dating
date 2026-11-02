@@ -1,0 +1,334 @@
+import { HttpError, L, json, localize, readJson } from "../../platform/http.js";
+import { periodAt, addDays, isPeriodId } from "../../platform/period.js";
+
+// Daily check-in: the period's task is simply to check in; there is no external evidence to
+// verify. Whether checking in also puts you on that period's list is a per-user setting
+// (auto_join, on by default, shown before you check in); with it off you join the list by hand.
+// Lists are per period and close when the period ends.
+
+const MODULE_VERSION = 1;
+
+const manifest = {
+  module_id: "checkin",
+  module_version: MODULE_VERSION,
+  api_version: 1,
+  name: L("每日签到", "Daily Check-in"),
+  description: L(
+    "每天签到一次，签到后就进入当天名单，看看今天还有谁也来了。",
+    "Check in once a day to join that day's list and see who else showed up.",
+  ),
+  frontend: "/modules/checkin/app.js",
+  table_prefix: "ci_",
+  env: [],
+};
+
+const RULES_TEXT = [
+  L(
+    "每天（按本挑战时区 0 点起）为一期。开启“签到后自动加入名单”时（默认开启），签到即表示你愿意出现在当期名单里，并会按你的个人资料展示；关闭后只记录签到，可以之后手动加入。",
+    "Each day (from midnight in this challenge's time zone) is one period. With \"join the list when I check in\" on (the default), checking in means you want to appear on that period's list, shown according to your profile; with it off, only the check-in is recorded and you can join by hand.",
+  ),
+  L(
+    "只有当期已签到并在名单中的人能浏览名单，且只能看到与自己寻找相同关系的成员。",
+    "Only people checked in and on the current list can browse it, and only members looking for a relationship type you share are shown.",
+  ),
+  L(
+    "每期名单独立，不继承前一天的签到；这一期结束，名单就关闭。",
+    "Each period's list is separate and doesn't carry over; it closes when the period ends.",
+  ),
+  L(
+    "你可以随时退出当期名单，同一期内也可以再次加入。",
+    "You can leave the current list at any time and rejoin during the same period.",
+  ),
+];
+
+function reply(ctx, data, status) {
+  return json(localize(data, ctx.lang), status);
+}
+
+function validateConfig(cfg) {
+  const fail = (m) => {
+    throw new Error(`challenge ${cfg.challenge_id}: ${m}`);
+  };
+  if (cfg.schedule?.kind !== "calendar_day") fail("schedule.kind must be calendar_day");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: cfg.schedule.timezone });
+  } catch {
+    fail(`invalid timezone ${cfg.schedule.timezone}`);
+  }
+  if (!(cfg.members?.page_size > 0)) fail("members.page_size must be positive");
+  return Object.freeze(cfg);
+}
+
+function describeSchedule(cfg) {
+  const tz = cfg.schedule.timezone;
+  return L(`每天 0 点（${tz}）刷新`, `Refreshes daily at midnight (${tz})`);
+}
+
+function currentPeriod(ctx) {
+  return periodAt(ctx.now, ctx.config.schedule.timezone);
+}
+
+function requirePeriodId(pid) {
+  if (!isPeriodId(pid)) throw new HttpError(400, "invalid_request", L("周期标识不合法", "Invalid period id"));
+  return pid;
+}
+
+// The user's check-in preferences, with defaults for anyone who never changed them.
+async function getSettings(ctx) {
+  const row = await ctx.db.prepare("SELECT auto_join FROM ci_settings WHERE challenge_id = ?1 AND user_id = ?2", ctx.userId).first();
+  return { auto_join: row ? row.auto_join === 1 : true };
+}
+
+async function putSettings(ctx, request) {
+  const body = await readJson(request);
+  if (typeof body.auto_join !== "boolean") throw new HttpError(400, "invalid_request", L("设置不合法", "Invalid settings"));
+  await ctx.db
+    .prepare(
+      `INSERT INTO ci_settings (challenge_id, user_id, auto_join, updated_at) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT (challenge_id, user_id) DO UPDATE SET auto_join = excluded.auto_join, updated_at = excluded.updated_at`,
+      ctx.userId,
+      body.auto_join ? 1 : 0,
+      ctx.now,
+    )
+    .run();
+  return reply(ctx, { ok: true, settings: await getSettings(ctx) });
+}
+
+// status "left" means checked in but not on the list: the user left it, or auto_join was off.
+async function myCheckin(ctx, periodId) {
+  return ctx.db
+    .prepare(
+      "SELECT status, checked_in_at, left_at FROM ci_checkins WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3",
+      periodId,
+      ctx.userId,
+    )
+    .first();
+}
+
+// Only the current period's list is open, and only to people actively on it.
+async function canBrowse(ctx, periodId) {
+  if (periodId !== currentPeriod(ctx).period_id) return false;
+  if (!(await ctx.profiles.status(ctx.userId)).complete) return false;
+  return (await myCheckin(ctx, periodId))?.status === "active";
+}
+
+// Everyone on the period's list, in check-in order. Read through ctx.lists, so it is reloaded from
+// D1 only after a write to this list (each write below includes ctx.lists.changed(periodId)).
+function activeRows(ctx, periodId) {
+  return ctx.lists.cached(periodId, async () => {
+    const rows = await ctx.db
+      .prepare(
+        `SELECT member_id, user_id FROM ci_checkins
+         WHERE challenge_id = ?1 AND period_id = ?2 AND status = 'active'
+         ORDER BY checked_in_at ASC`,
+        periodId,
+      )
+      .all();
+    return rows.results;
+  });
+}
+
+// The other active members of the period, in check-in order.
+async function memberRows(ctx, periodId) {
+  return (await activeRows(ctx, periodId)).filter((r) => r.user_id !== ctx.userId);
+}
+
+// ---------- handlers ----------
+
+async function getCurrent(ctx) {
+  const cur = currentPeriod(ctx);
+  const [profile, mine, active, rows, settings] = await Promise.all([
+    ctx.profiles.status(ctx.userId),
+    myCheckin(ctx, cur.period_id),
+    activeRows(ctx, cur.period_id),
+    checkinRows(ctx),
+    getSettings(ctx),
+  ]);
+  return reply(ctx, {
+    ok: true,
+    rules: RULES_TEXT,
+    profile_complete: profile.complete,
+    period: { period_id: cur.period_id, starts_at: cur.starts_at, ends_at: cur.ends_at, timezone: ctx.config.schedule.timezone },
+    checkin: mine,
+    checked_in_count: active.length,
+    streak: streakFrom(rows.map((r) => r.period_id), cur.period_id),
+    settings,
+  });
+}
+
+async function requireCurrentAndProfile(ctx, periodId) {
+  if (periodId !== currentPeriod(ctx).period_id) {
+    throw new HttpError(400, "invalid_request", L("只能操作当期", "Only the current period can be changed"));
+  }
+  if (!(await ctx.profiles.status(ctx.userId)).complete) {
+    throw new HttpError(400, "profile_incomplete", L("请先补齐个人资料", "Please complete your profile first"));
+  }
+}
+
+// Check in for the current period; joins the list only if auto_join is on. Checking in again
+// changes nothing.
+async function checkIn(ctx, periodId) {
+  await requireCurrentAndProfile(ctx, periodId);
+  const { auto_join: autoJoin } = await getSettings(ctx);
+  await ctx.db.batch([
+    ctx.db.prepare(
+      `INSERT INTO ci_checkins (challenge_id, period_id, user_id, member_id, status, checked_in_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+       ON CONFLICT (challenge_id, period_id, user_id) DO NOTHING`,
+      periodId,
+      ctx.userId,
+      crypto.randomUUID(),
+      autoJoin ? "active" : "left",
+      ctx.now,
+    ),
+    ctx.lists.changed(periodId),
+  ]);
+  return reply(ctx, {
+    ok: true,
+    message: autoJoin
+      ? L("签到成功，已加入本期名单！", "Checked in and added to this period's list!")
+      : L("签到成功！", "Checked in!"),
+  });
+}
+
+// Join the current period's list after checking in (auto_join off, or after leaving).
+async function join(ctx, periodId) {
+  await requireCurrentAndProfile(ctx, periodId);
+  const [res] = await ctx.db.batch([
+    ctx.db.prepare(
+      `UPDATE ci_checkins SET status = 'active', left_at = NULL
+       WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3`,
+      periodId,
+      ctx.userId,
+    ),
+    ctx.lists.changed(periodId),
+  ]);
+  if (!res.meta.changes) throw new HttpError(400, "not_checked_in", L("请先签到", "Please check in first"));
+  return reply(ctx, { ok: true, status: "active", message: L("已加入本期名单", "You joined this period's list") });
+}
+
+async function leave(ctx, periodId) {
+  await ctx.db.batch([
+    ctx.db.prepare(
+      `UPDATE ci_checkins SET status = 'left', left_at = ?4
+       WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3 AND status = 'active'`,
+      periodId,
+      ctx.userId,
+      ctx.now,
+    ),
+    ctx.lists.changed(periodId),
+  ]);
+  return reply(ctx, {
+    ok: true,
+    status: "left",
+    message: L("已退出本期名单；本期内可以再次加入", "You left this period's list; you can rejoin this period"),
+  });
+}
+
+async function getMembers(ctx, periodId, url) {
+  if (periodId !== currentPeriod(ctx).period_id) {
+    throw new HttpError(403, "list_closed", L("该期名单已关闭", "This period's list is closed"));
+  }
+  if (!(await canBrowse(ctx, periodId))) {
+    throw new HttpError(403, "not_member", L("你不在该期名单中，无法浏览", "You are not on this period's list, so you cannot browse it"));
+  }
+  const rows = await memberRows(ctx, periodId);
+  const cards = await ctx.profiles.cards(ctx.userId, rows.map((r) => r.user_id));
+  const visible = rows.flatMap((r) => (cards.get(r.user_id) ? [{ member_id: r.member_id, ...cards.get(r.user_id) }] : []));
+  const pageSize = ctx.config.members.page_size;
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+  return reply(ctx, {
+    ok: true,
+    period_id: periodId,
+    total: visible.length,
+    page,
+    page_size: pageSize,
+    members: visible.slice((page - 1) * pageSize, page * pageSize),
+  });
+}
+
+// Consecutive check-in days ending today, or ending yesterday if today isn't checked in yet
+// (the streak isn't broken until the day is over). Leaving a list still counts as checked in.
+export function streakFrom(periodIds, today) {
+  const days = new Set(periodIds);
+  let day = days.has(today) ? today : addDays(today, -1);
+  let streak = 0;
+  while (days.has(day)) {
+    streak++;
+    day = addDays(day, -1);
+  }
+  return streak;
+}
+
+async function checkinRows(ctx) {
+  const rows = await ctx.db
+    .prepare(
+      `SELECT period_id, checked_in_at, status FROM ci_checkins
+       WHERE challenge_id = ?1 AND user_id = ?2 ORDER BY period_id DESC LIMIT 366`,
+      ctx.userId,
+    )
+    .all();
+  return rows.results;
+}
+
+// Check-in days, newest first, with the current streak.
+async function getHistory(ctx) {
+  const rows = await checkinRows(ctx);
+  const streak = streakFrom(rows.map((r) => r.period_id), currentPeriod(ctx).period_id);
+  return reply(ctx, { ok: true, total: rows.length, streak, checkins: rows });
+}
+
+async function handleRequest(request, ctx, parts) {
+  const url = new URL(request.url);
+  const m = request.method;
+  const [a, b, c] = parts;
+  if (a === "periods" && b === "current" && !c && m === "GET") return getCurrent(ctx);
+  if (a === "history" && !b && m === "GET") return getHistory(ctx);
+  if (a === "settings" && !b && m === "GET") return reply(ctx, { ok: true, settings: await getSettings(ctx) });
+  if (a === "settings" && !b && m === "PUT") return putSettings(ctx, request);
+  if (a === "data" && !b && m === "DELETE") {
+    await dataLifecycle.purgeUser(ctx);
+    return reply(ctx, { ok: true, purged: true });
+  }
+  if (a === "periods" && b && parts.length === 3) {
+    const pid = requirePeriodId(b);
+    if (c === "checkin" && m === "POST") return checkIn(ctx, pid);
+    if (c === "membership" && m === "POST") return join(ctx, pid);
+    if (c === "membership" && m === "DELETE") return leave(ctx, pid);
+    if (c === "members" && m === "GET") return getMembers(ctx, pid, url);
+  }
+  throw new HttpError(404, "not_found", L("接口不存在", "Not found"));
+}
+
+// Server-side only; merged by the platform for the home page.
+async function browsableUserIds(ctx) {
+  const pid = currentPeriod(ctx).period_id;
+  if (!(await canBrowse(ctx, pid))) return [];
+  return (await memberRows(ctx, pid)).map((r) => r.user_id);
+}
+
+const dataLifecycle = {
+  data_version: 1,
+  async purgeUser(ctx) {
+    await ctx.db.batch([
+      ...["ci_checkins", "ci_settings"].map((t) => ctx.db.prepare(`DELETE FROM ${t} WHERE challenge_id = ?1 AND user_id = ?2`, ctx.userId)),
+      // Only the current period's list can be browsed.
+      ctx.lists.changed(currentPeriod(ctx).period_id),
+    ]);
+  },
+  // Daily clean-up (Cron Trigger): the cache version rows of closed lists. Check-ins themselves
+  // stay; they are the user's history and streak.
+  async prune(ctx) {
+    await ctx.lists.forgetBefore(currentPeriod(ctx).period_id).run();
+  },
+  onDisable: "retain",
+};
+
+export default {
+  manifest,
+  validateConfig,
+  describeSchedule,
+  handleRequest,
+  browsableUserIds,
+  dataLifecycle,
+};

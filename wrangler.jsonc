@@ -1,0 +1,64 @@
+{
+	"name": "uwcse-date",
+	"main": "src/index.js",
+	"compatibility_date": "2026-10-01",
+	// Served only at uwcse.date, which sits behind Cloudflare Access (configured in the Zero Trust
+	// dashboard, not here). As a Custom Domain the Worker is the origin: Cloudflare manages the DNS
+	// record and certificate, and there is no other origin traffic could fall through to. workers.dev
+	// stays off: it would be a second, public hostname that bypasses Access and the zone's WAF rules.
+	"routes": [{ "pattern": "uwcse.date", "custom_domain": true }],
+	"workers_dev": false,
+	// Preview (version) URLs would run unreleased versions against the production D1 and R2.
+	"preview_urls": false,
+	// Front-end pages and default avatars. /api/* and /auth/* (Google sign-in) go to the Worker first.
+	"assets": {
+		"directory": "./public",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/auth/*"
+		]
+	},
+	// Deployment config. Secrets (GOOGLE_CLIENT_SECRET, ACCOUNT_KEY) are set with
+	// `wrangler secret put`; see docs/deploy.md. Set ACCESS_TEAM_DOMAIN / ACCESS_AUD only to use
+	// Cloudflare Access instead of Google sign-in.
+	"vars": {
+		"ALLOWED_EMAIL_DOMAINS": "cs.washington.edu",
+		// Google OAuth client ID. Not a secret: it appears in every sign-in URL. Local development
+		// takes GOOGLE_CLIENT_ID from .dev.vars instead.
+		"GOOGLE_CLIENT_ID": "115375022397-7rnd0imgnvqshiub3vs947qevsop844r.apps.googleusercontent.com"
+	},
+	// Production database (region WNAM). `wrangler dev` uses a local copy under .wrangler/state;
+	// commands with --remote use the real one.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "uwcse-date-db",
+			"database_id": "32ac531f-5fa5-4e68-ba8d-7674ecea7ba2",
+			"migrations_dir": "migrations"
+		}
+	],
+	// Uploaded avatars (avatars/<id>).
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "uwcse-date-bucket"
+		}
+	],
+	// Scheduled runs (src/index.js): queued ban requests every 5 minutes, and the daily clean-up at
+	// 11:17 UTC, 3-4 am in Seattle.
+	"triggers": { "crons": ["*/5 * * * *", "17 11 * * *"] },
+	// Request rate limits (src/platform/rate-limit.js). Counted by Cloudflare, not in D1; period
+	// must be 10 or 60 s. namespace_id only has to be unique within the Cloudflare account.
+	"ratelimits": [
+		// Per signed-in email: every /api request not covered below.
+		{ "name": "RL_API", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } },
+		// Per signed-in email: the home page's people and member list pages.
+		{ "name": "RL_LIST", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } },
+		// Per signed-in email: uploaded avatar images (one request per card shown).
+		{ "name": "RL_AVATAR", "namespace_id": "1003", "simple": { "limit": 300, "period": 60 } },
+		// Per client IP: /auth/login and /auth/callback.
+		{ "name": "RL_AUTH", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } }
+	]
+}
