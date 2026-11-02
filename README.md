@@ -1,6 +1,6 @@
 # UWCSE.date
 
-A small social site for the UW Allen School community. Members take part in daily challenges: a check-in, or one LeetCode problem that is the same for everyone. Everyone on a day's list who is looking for the same kind of relationship (friendship, a study buddy, or dating) can see each other's cards, with the contact details each person chose to share.
+A small social site for the UW Allen School community. Members take part in daily challenges: a check-in, or one LeetCode problem that is the same for everyone. Everyone on a day's list who is looking for the same kind of relationship (friendship, a study buddy, or a long-term romantic relationship; the site does not support looking for short-term ones) can see each other's cards, with the contact details each person chose to share.
 
 UWCSE.date is an unofficial site run independently by an individual. It is not a service of the Paul G. Allen School or the University of Washington and is not managed or endorsed by them.
 

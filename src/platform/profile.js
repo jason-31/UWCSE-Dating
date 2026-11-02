@@ -10,7 +10,8 @@ import { vault } from "./vault.js";
 export const RELATION_LABELS = {
   FRIENDSHIP: L("朋友", "Friendship"),
   STUDY: L("学习搭子", "Study buddy"),
-  ROMANCE: L("约会或恋爱", "Dating or romance"),
+  // Long-term relationships only; the site does not support looking for short-term ones.
+  ROMANCE: L("恋爱", "Romantic relationship"),
 };
 // Preset avatars (static files). A profile may instead use its own upload ("upload:<id>").
 export const AVATARS = [

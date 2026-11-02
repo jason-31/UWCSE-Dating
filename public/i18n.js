@@ -13,7 +13,7 @@ function detect() {
 export const lang = detect();
 document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
 // Tab title per language; index.html carries the English one for crawlers and no-JS.
-document.title = lang === "zh" ? "UWCSE - 奶蛙约会" : "UWCSE Social";
+document.title = lang === "zh" ? "UWCSE - 奶蛙恋爱" : "UWCSE - MilkFrog Dating";
 
 export function setLang(next) {
   try {
@@ -33,8 +33,8 @@ export function makeT(dict) {
 }
 
 export const RELATIONS = {
-  zh: { FRIENDSHIP: "朋友", STUDY: "学习搭子", ROMANCE: "约会或恋爱" },
-  en: { FRIENDSHIP: "Friendship", STUDY: "Study buddy", ROMANCE: "Dating or romance" },
+  zh: { FRIENDSHIP: "朋友", STUDY: "学习搭子", ROMANCE: "恋爱" },
+  en: { FRIENDSHIP: "Friendship", STUDY: "Study buddy", ROMANCE: "Romantic relationship" },
 }[lang];
 
 export const FIELDS = {
@@ -93,6 +93,8 @@ export const t = makeT({
     rule1: "本站通过可验证的学术挑战，让完成同一期任务、并且有共同交友意向的人发现彼此。",
     rule2: "这份个人资料全站通用。各挑战只会另外收集该挑战必需的信息（例如 LeetCode 账号）。",
     rule3: "本站不提供站内消息，只展示你主动开放的联系方式。",
+    rule4: "“恋爱”指以长期关系为目标的认真交往。本站不支持寻找短期恋爱。",
+    romance_hint: "“恋爱”指以长期关系为目标的认真交往，本站不支持寻找短期恋爱。",
     accept_rules: " 我已阅读并同意以上规则",
     welcome: "欢迎来到 UWCSE.date",
     welcome_pre: "你已以 ",
@@ -152,7 +154,7 @@ export const t = makeT({
     filter_title: "筛选：只和勾选范围内的人互相看到",
     filter_need_one: "每项筛选至少保留一个选项",
     filter_hint:
-      "默认全选，表示不限；取消勾选后，只和性别、项目在勾选范围内的人互相看到。筛选是双向的：你也要符合对方的条件才会互相看到。请注意：能在某种关系下看到你的人，会知道你在这种关系上接受他们的性别和项目；对“约会或恋爱”来说，这可能透露你的性取向。性别由每个人自己填写。",
+      "默认全选，表示不限；取消勾选后，只和性别、项目在勾选范围内的人互相看到。筛选是双向的：你也要符合对方的条件才会互相看到。请注意：能在某种关系下看到你的人，会知道你在这种关系上接受他们的性别和项目；对“恋爱”来说，这可能透露你的性取向。性别由每个人自己填写。",
     preview_only: "筛选：{only}",
     preview_any: "不筛选",
     note_label: "对这段关系的期待（选填）",
@@ -200,6 +202,8 @@ export const t = makeT({
     rule1: "Through verifiable academic challenges, people who finish the same period and share a relationship goal can find each other.",
     rule2: "This profile is shared across the whole site. Each challenge only collects what it strictly needs (e.g. your LeetCode account).",
     rule3: "There is no messaging on this site; only the contact details you choose to share are shown.",
+    rule4: "\"Romantic relationship\" means dating seriously with a long-term relationship in mind. This site does not support looking for short-term relationships.",
+    romance_hint: "\"Romantic relationship\" means dating seriously with a long-term relationship in mind; this site does not support looking for short-term relationships.",
     accept_rules: " I have read and accept these rules",
     welcome: "Welcome to UWCSE.date",
     welcome_pre: "You are signed in as ",
@@ -259,7 +263,7 @@ export const t = makeT({
     filter_title: "Filter: only see each other within the ticked options",
     filter_need_one: "Keep at least one option ticked in each filter",
     filter_hint:
-      "Everything is ticked by default, meaning no restriction; untick to only see each other with people whose gender and program are ticked. Filters work both ways: you also have to meet theirs to see each other. Note: anyone who can see you under a relationship learns that your filter for it accepts their gender and program; for dating, this can reveal your sexual orientation. Gender is self-reported.",
+      "Everything is ticked by default, meaning no restriction; untick to only see each other with people whose gender and program are ticked. Filters work both ways: you also have to meet theirs to see each other. Note: anyone who can see you under a relationship learns that your filter for it accepts their gender and program; for a romantic relationship, this can reveal your sexual orientation. Gender is self-reported.",
     preview_only: "Filter: {only}",
     preview_any: "No filter",
     note_label: "What you hope for (optional)",

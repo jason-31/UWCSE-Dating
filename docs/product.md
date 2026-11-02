@@ -23,10 +23,10 @@ One profile per person, shared by every challenge. Challenges never collect pers
 | Gender | Required: male, female, non-binary or prefer not to say; basic info | Always. "Prefer not to say" is an ordinary value, shown as such and usable in filters |
 | Program | Required, one Allen School program: BS in Computer Science, BS in Computer Engineering, BS/MS, PMP, PhD, Staff; basic info | Always |
 | Avatar | Required: a preset or one's own upload; basic info | Always |
-| Looking for | Required, one or more of friendship, study buddy, dating or romance | As the relations both people share |
+| Looking for | Required, one or more of friendship, study buddy, romantic relationship. A romantic relationship means dating seriously with a long-term relationship in mind; looking for short-term relationships is not supported, and the site rules accepted at registration say so | As the relations both people share |
 | Filters | Optional, per relation sought, by gender and program. Everything ticked means no restriction; each filter keeps at least one value | Never; they decide who sees whom (below) |
 | What you hope for | Optional, one note per relation sought, length at most 400 | Only to people who share that relation |
-| WeChat, Discord | Optional, at most 64 characters each | Only to the relations the owner opens them to; dating only by default |
+| WeChat, Discord | Optional, at most 64 characters each | Only to the relations the owner opens them to; romance only by default |
 | Research interests, bio | Optional, length at most 240 and 600 | Always, when filled in |
 
 - **Length** of the free-text fields is weighted: letters and digits count 1, Chinese and other full-width characters (and emoji) count 2. A Chinese and an English text at the limit say about as much and take about as much room on a card.
@@ -36,14 +36,14 @@ One profile per person, shared by every challenge. Challenges never collect pers
 
 ## Who sees whom
 
-- **Per challenge.** Each person may choose, per challenge, which of their profile's relations they seek there (for example, friendship through the Daily Check-in and dating only through LeetCode). Not choosing means all of them; a choice keeps at least one, and only narrows the profile, so it has no change lock: it can never show anyone a person they could not already see. If later profile changes leave none of a challenge's choice, the person is visible to nobody there until they choose again.
+- **Per challenge.** Each person may choose, per challenge, which of their profile's relations they seek there (for example, friendship through the Daily Check-in and romance only through LeetCode). Not choosing means all of them; a choice keeps at least one, and only narrows the profile, so it has no change lock: it can never show anyone a person they could not already see. If later profile changes leave none of a challenge's choice, the person is visible to nobody there until they choose again.
 - In a challenge, two people see each other under a relation when **both seek it in that challenge** and **each passes the other's filters** for it. These are their common relations. With no common relation, the API returns nothing about the other person: no card, avatar or count.
 - A visible card shows the basic info, research interests and bio; WeChat and Discord when the owner opened them to one of the common relations; and the notes for the common relations.
 - Filters only use gender and program, which every card shows anyway, so matching never depends on hidden information.
-- Because filters are two-way, someone who can see you under a relation learns that you accept their gender (and program) for it. For dating this can reveal sexual orientation. The profile form and the About page say so.
+- Because filters are two-way, someone who can see you under a relation learns that you accept their gender (and program) for it. For romance this can reveal sexual orientation. The profile form and the About page say so.
 - All filtering happens on the server; nothing is sent to the browser to be hidden there.
 
-Examples: A seeks friendship and dating, B only friendship, C only dating. A and B see each other under friendship, A and C under dating, B and C not at all. If A opens WeChat to dating only (the default), C sees it and B does not; A's friendship note is shown to B and not to C.
+Examples: A seeks friendship and romance, B only friendship, C only romance. A and B see each other under friendship, A and C under romance, B and C not at all. If A opens WeChat to romance only (the default), C sees it and B does not; A's friendship note is shown to B and not to C.
 
 ## Challenges
 
@@ -106,8 +106,8 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A09 | No matching submission among the recent ones | "Not found yet" or "cannot verify", never "did not solve" |
 | A10 | The data source times out, rate-limits or changes shape | Reported as unavailable; no completion or badge granted |
 | A11 | Repeated or concurrent checks | Completion, membership and badges stay single |
-| A12 | Two people share only friendship | Cards and friendship notes visible; WeChat or Discord opened to dating only, and dating notes, are not |
-| A13 | Both seek dating and the owner opened a contact field to it | That field is shown |
+| A12 | Two people share only friendship | Cards and friendship notes visible; WeChat or Discord opened to romance only, and romance notes, are not |
+| A13 | Both seek romance and the owner opened a contact field to it | That field is shown |
 | A14 | No common relation, or the viewer is not on the list | List and card endpoints reveal nothing about the other person |
 | A15 | Someone leaves today's list and checks again | They stay off the list until they rejoin explicitly |
 | A16 | A new day, including a daylight-saving change | A new period by Los Angeles midnight; yesterday's membership does not carry over |
@@ -117,8 +117,8 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A20 | Another challenge or a test module is configured | It cannot read this challenge's data; the profile is shared |
 | A21 | Configuration or module changes | Published periods keep their problem and rules; other challenges are unaffected |
 | A22 | Relations or filters changed again within 7 days | Refused with the time they can change; other fields still save |
-| A23 | A's dating filter: women, BS or BS/MS; B: a woman in the PhD program; both seek friendship and dating | They see each other under friendship only |
-| A24 | B chose "prefer not to say"; A's dating filter has only women | Not visible to each other under dating until A also ticks "prefer not to say" |
+| A23 | A's romance filter: women, BS or BS/MS; B: a woman in the PhD program; both seek friendship and romance | They see each other under friendship only |
+| A24 | B chose "prefer not to say"; A's romance filter has only women | Not visible to each other under romance until A also ticks "prefer not to say" |
 | A25 | Avatar changed, then nickname, gender or program within 30 days | Refused with the time it can change; relations, contacts and "about me" still save |
 | A26 | Upload attempts beyond 5 in 30 days, or deleting the upload or account in between | Refused with the date of the next allowed upload; deleting restores nothing |
 | A27 | An account is deleted and registered again with the same email | Refused until the deleted profile's locks would have expired |
@@ -126,7 +126,7 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A29 | The database and avatar bucket are read directly | No email, profile field, contact, note, LeetCode username, ban reason or image appears in the clear |
 | A30 | A session row is inserted or edited without `DATA_KEY` | It signs no one in |
 | A31 | "Join this period's list automatically" is ask, never or always | Ask: nobody is listed or left off without an answer; never: completing the task never lists anyone, joining by hand still works; always: completing the task lists them |
-| A32 | A seeks friendship and dating, but only friendship in the Daily Check-in and only dating in LeetCode Daily; B seeks both everywhere | In the check-in list they see each other under friendship only, in LeetCode under dating only; on the home page under both |
+| A32 | A seeks friendship and romance, but only friendship in the Daily Check-in and only romance in LeetCode Daily; B seeks both everywhere | In the check-in list they see each other under friendship only, in LeetCode under romance only; on the home page under both |
 | A33 | A per-challenge choice with no relation, or with one not in the profile | Refused |
 
 A LeetCode-backed launch also needs the positive and failure cases above run against the real data source; mocks alone do not show that completions can be verified.
