@@ -1,6 +1,7 @@
 import { h, fill, api, fmtTime, toast, ApiError } from "/lib.js";
 import { makeT } from "/i18n.js";
 import { joinModeField } from "/join-mode.js";
+import { challengeRelationsSlot } from "/challenge-relations.js";
 import { personCard } from "/card.js";
 
 const t = makeT({
@@ -71,9 +72,6 @@ const t = makeT({
     withdraw_confirm: "退出后你会从所有本挑战名单中撤下，以后也不会再自动进入 list。账号绑定会保留，之后可以重新报名。确定吗？",
     purge: "删除我在本挑战的全部数据",
     purge_confirm: "将删除你在本挑战的账号绑定、完成记录和名单资格（个人资料不受影响），无法恢复。确定吗？",
-    profile: "个人资料",
-    profile_hint: "昵称、头像、寻找的关系和联系方式是全站通用的个人资料。",
-    edit_profile: "编辑个人资料 →",
     participation: "参加设置",
     my_completions: "我的完成记录",
     col_period: "周期",
@@ -152,9 +150,6 @@ const t = makeT({
     withdraw_confirm: "You'll be removed from all of this challenge's lists and won't join any automatically. Your account binding is kept, so you can rejoin later. Continue?",
     purge: "Delete all my data in this challenge",
     purge_confirm: "This deletes your account binding, completions and list memberships in this challenge (your profile is kept). This cannot be undone. Continue?",
-    profile: "Profile",
-    profile_hint: "Nickname, avatar, what you're looking for and contact details are part of your site-wide profile.",
-    edit_profile: "Edit profile →",
     participation: "Participation",
     my_completions: "My completions",
     col_period: "Period",
@@ -259,6 +254,7 @@ export async function mount(root, { challengeId, challenge }) {
       h("h2", {}, t("challenge_rules")),
       h("ul", { class: "rules" }, enrollment.rules.map((r) => h("li", {}, r))),
       h("label", { class: "check" }, accept, t("accept_rules")),
+      challengeRelationsSlot(challengeId),
       joinChoice,
       enrollment.enrollment?.status === "withdrawn" && h("p", { class: "muted small" }, t("withdrawn_hint")),
       btn,
@@ -521,18 +517,12 @@ export async function mount(root, { challengeId, challenge }) {
       await refresh();
     };
     view.replaceChildren(
-      h(
-        "section",
-        { class: "panel" },
-        h("h2", {}, t("profile")),
-        h("p", { class: "muted small" }, t("profile_hint")),
-        h("a", { href: "#/profile" }, t("edit_profile")),
-      ),
       bindingPanel(),
       h(
         "section",
         { class: "panel" },
         h("h2", {}, t("participation")),
+        challengeRelationsSlot(challengeId),
         joinChoice,
         h("div", { class: "row" }, withdraw, purge),
       ),

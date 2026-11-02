@@ -164,7 +164,7 @@ export const t = makeT({
     preview_row: "：基本信息、关于我",
     preview_note: "对这段关系的期待",
     preview_empty: "至少选择一种关系后可预览。",
-    preview_footer: "只有和你在同一个挑战同一期名单里、且至少有一种共同关系的人能看到你的卡片。每个字段只展示给你在这里勾选、且对方也在寻找的关系。",
+    preview_footer: "只有和你在同一个挑战同一期名单里、且至少有一种共同关系的人能看到你的卡片。每个字段只展示给你在这里勾选、且对方也在寻找的关系。每个挑战还可以在自己的设置里只选其中几种关系。",
     sep: "、",
   },
   en: {
@@ -271,7 +271,7 @@ export const t = makeT({
     preview_row: ": basic info, about me",
     preview_note: "your hopes for it",
     preview_empty: "Choose at least one relationship to see the preview.",
-    preview_footer: "Only people on the same period's list of the same challenge who share at least one relationship type with you can see your card. Each field is shown only for the relationships you tick here that they are also looking for.",
+    preview_footer: "Only people on the same period's list of the same challenge who share at least one relationship type with you can see your card. Each field is shown only for the relationships you tick here that they are also looking for. Each challenge's settings can narrow this to some of the types.",
     sep: ", ",
   },
 });

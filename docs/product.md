@@ -36,7 +36,8 @@ One profile per person, shared by every challenge. Challenges never collect pers
 
 ## Who sees whom
 
-- Two people see each other under a relation when **both seek it** and **each passes the other's filters** for it. These are their common relations. With no common relation, the API returns nothing about the other person: no card, avatar or count.
+- **Per challenge.** Each person may choose, per challenge, which of their profile's relations they seek there (for example, friendship through the Daily Check-in and dating only through LeetCode). Not choosing means all of them; a choice keeps at least one, and only narrows the profile, so it has no change lock: it can never show anyone a person they could not already see. If later profile changes leave none of a challenge's choice, the person is visible to nobody there until they choose again.
+- In a challenge, two people see each other under a relation when **both seek it in that challenge** and **each passes the other's filters** for it. These are their common relations. With no common relation, the API returns nothing about the other person: no card, avatar or count.
 - A visible card shows the basic info, research interests and bio; WeChat and Discord when the owner opened them to one of the common relations; and the notes for the common relations.
 - Filters only use gender and program, which every card shows anyway, so matching never depends on hidden information.
 - Because filters are two-way, someone who can see you under a relation learns that you accept their gender (and program) for it. For dating this can reveal sexual orientation. The profile form and the About page say so.
@@ -54,7 +55,7 @@ Rules every challenge follows:
 - **Browsing a list requires being on it**, actively, with a complete profile. A list closes when its period ends (a challenge may allow a short look-back for that period's members).
 - Leaving a list is always possible. Challenges never read each other's data, and nothing earned in one counts in another.
 
-The **home page** shows, on the left, the open challenges; on the right, everyone the viewer can browse right now through any list, de-duplicated and grouped by the viewer's relations. Someone sharing several relations with the viewer appears under each. Each group shows its first 24 people, with "Show more" for the rest. Where someone was met is never shown.
+The **home page** shows, on the left, the open challenges; on the right, everyone the viewer can browse right now through any list, de-duplicated and grouped by the relations the viewer seeks in any enabled challenge. A person's common relations there are those matching in any challenge where the two share a list; someone sharing several relations with the viewer appears under each. Each group shows its first 24 people, with "Show more" for the rest. Where someone was met is never shown, though a relation sought in only one challenge implies it (the privacy notice says so).
 
 ### LeetCode Daily
 
@@ -125,5 +126,7 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A29 | The database and avatar bucket are read directly | No email, profile field, contact, note, LeetCode username, ban reason or image appears in the clear |
 | A30 | A session row is inserted or edited without `DATA_KEY` | It signs no one in |
 | A31 | "Join this period's list automatically" is ask, never or always | Ask: nobody is listed or left off without an answer; never: completing the task never lists anyone, joining by hand still works; always: completing the task lists them |
+| A32 | A seeks friendship and dating, but only friendship in the Daily Check-in and only dating in LeetCode Daily; B seeks both everywhere | In the check-in list they see each other under friendship only, in LeetCode under dating only; on the home page under both |
+| A33 | A per-challenge choice with no relation, or with one not in the profile | Refused |
 
 A LeetCode-backed launch also needs the positive and failure cases above run against the real data source; mocks alone do not show that completions can be verified.

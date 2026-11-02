@@ -193,7 +193,7 @@ await ctx.profiles.cards(viewerId, ownerIds)
 // → Map<ownerId, Card | null>   (null = the two share no relation; never show that person)
 ```
 
-`Card` has already been filtered by shared relations, both people's per-relation filters (two-way, on gender and program), and the owner's per-relation visibility of contact fields. A card is `null` when no relation matches both ways:
+`Card` has already been filtered by shared relations (what each person seeks in this challenge: their profile's relations, narrowed by their choice for this challenge, which the platform stores and applies), both people's per-relation filters (two-way, on gender and program), and the owner's per-relation visibility of contact fields. A card is `null` when no relation matches both ways:
 
 ```js
 {

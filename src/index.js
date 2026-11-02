@@ -13,6 +13,9 @@ import {
   profileService,
   profilesChangedStatement,
   emailAllowed,
+  challengeRelationsStatement,
+  challengeRelationsFrom,
+  relationsIn,
 } from "./platform/profile.js";
 import { listCache } from "./platform/cache.js";
 import { enforceRateLimit, apiLimiter, clientIp } from "./platform/rate-limit.js";
@@ -114,8 +117,9 @@ function profileConfig(env) {
 }
 
 // Restricted context for one challenge: its own config and namespace, profile access that only
-// yields completeness and filtered cards (one service per request, shared by every module), the
-// versioned cache for its member lists, and sealing under purposes prefixed with its id.
+// yields completeness and filtered cards (one service per request, shared by every module; cards
+// use what each person seeks in this challenge), the versioned cache for its member lists, and
+// sealing under purposes prefixed with its id.
 function moduleContext(entry, env, { userId, now, lang, profiles }) {
   const { module, config } = entry;
   return {
@@ -125,7 +129,10 @@ function moduleContext(entry, env, { userId, now, lang, profiles }) {
     now,
     lang, // "zh" | "en"; modules localize their own messages
     db: scopedDb(env.DB, config.challenge_id, module.manifest.table_prefix),
-    profiles,
+    profiles: profiles && {
+      status: (id) => profiles.status(id),
+      cards: (viewerId, ownerIds) => profiles.cards(viewerId, ownerIds, config.challenge_id),
+    },
     lists: listCache(env.DB, config.challenge_id),
     vault: moduleVault(env, config.challenge_id),
     // Only the env entries this module declared.
@@ -313,6 +320,26 @@ async function handleApi(request, env, url, lang) {
     return json({ ok: true, profile: publicProfile(await getProfile(env, userId)) });
   }
 
+  // Which of their profile's relations the user seeks in one challenge. GET returns the choice
+  // (null: never made, meaning all) and its effect; PUT replaces it.
+  if (parts[1] === "profile" && parts[2] === "relations" && parts.length === 4 && ["GET", "PUT"].includes(request.method)) {
+    const entry = challenges.get(parts[3]);
+    if (!entry || !entry.config.enabled) throw new HttpError(404, "challenge_not_found", L("该挑战不存在或未启用", "This challenge does not exist or is disabled"));
+    const challengeId = entry.config.challenge_id;
+    let p = await getProfile(env, userId);
+    if (request.method === "PUT") {
+      const relations = challengeRelationsFrom((await readJson(request)).relations, p, profileCfg);
+      await env.DB.batch([await challengeRelationsStatement(env, p, challengeId, relations), profilesChangedStatement(env.DB)]);
+      p = await getProfile(env, userId);
+    }
+    return json({
+      ok: true,
+      profile_relations: p.relations,
+      chosen: p.challenge_relations?.[challengeId] ?? null,
+      relations: relationsIn(p, challengeId), // empty when none of the choice is in the profile any more
+    });
+  }
+
   if (route === "GET /challenges") {
     const list = [...challenges.values()]
       .filter((s) => s.config.enabled)
@@ -328,19 +355,25 @@ async function handleApi(request, env, url, lang) {
   }
 
   // Everyone this user can browse right now, merged across all challenges' open lists and
-  // de-duplicated, in one section per relation the viewer seeks. Which challenge or list made
-  // someone visible is deliberately not returned. Each section returns its first
-  // PEOPLE_PAGE_SIZE people; ?relation=<R>&offset=<n> returns the next ones of one section.
+  // de-duplicated, in one section per relation the viewer seeks in any enabled challenge. A
+  // person's common relations are those matching in any challenge where the two share a list.
+  // Which challenge or list made someone visible is not returned (though a relation sought in
+  // only one challenge implies it). Each section returns its first PEOPLE_PAGE_SIZE people;
+  // ?relation=<R>&offset=<n> returns the next ones of one section.
   if (route === "GET /people") {
-    const ids = [];
+    const idsByChallenge = new Map();
+    const sought = new Set();
     for (const entry of challenges.values()) {
-      if (!entry.config.enabled || !entry.module.browsableUserIds) continue;
-      ids.push(...(await entry.module.browsableUserIds(moduleContext(entry, env, { userId, now, lang, profiles }))));
+      if (!entry.config.enabled) continue;
+      const challengeId = entry.config.challenge_id;
+      for (const r of await profiles.relations(userId, challengeId)) sought.add(r);
+      if (!entry.module.browsableUserIds) continue;
+      const ids = await entry.module.browsableUserIds(moduleContext(entry, env, { userId, now, lang, profiles }));
+      idsByChallenge.set(challengeId, ids.filter((id) => id !== userId));
     }
-    const unique = [...new Set(ids)].filter((id) => id !== userId);
-    const cards = await profiles.cards(userId, unique);
-    const people = unique.map((id) => cards.get(id)).filter(Boolean);
-    const relations = await profiles.relations(userId);
+    const cards = await profiles.cardsAcross(userId, idsByChallenge);
+    const people = [...cards.values()].filter(Boolean);
+    const relations = profileCfg.relation_options.filter((r) => sought.has(r));
     const inRelation = (rel) => people.filter((m) => m.common_relations.includes(rel));
     const relation = url.searchParams.get("relation");
     if (relation !== null) {
