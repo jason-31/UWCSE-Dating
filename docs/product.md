@@ -50,7 +50,7 @@ Rules every challenge follows:
 
 - **The same task for everyone in a period.** The task depends only on the challenge's configuration and the period, is fixed once drawn, and is never re-drawn for anyone.
 - **Completion is decided by the server** from evidence it obtains itself. Screenshots, self-reports and client-supplied data prove nothing.
-- **Explicit consent to be listed**: an opt-in to auto-join, or an action that is itself a request to be listed (checking in).
+- **Explicit consent to be listed.** Every challenge offers the same per-person choice, "Join this period's list automatically": always, ask each time, or never. Joining by hand stays possible with never.
 - **Browsing a list requires being on it**, actively, with a complete profile. A list closes when its period ends (a challenge may allow a short look-back for that period's members).
 - Leaving a list is always possible. Challenges never read each other's data, and nothing earned in one counts in another.
 
@@ -59,7 +59,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 ### LeetCode Daily
 
 - **Period**: a calendar day in Los Angeles time. **Problem**: drawn once per period at random from the free Easy and Medium problems of the configured pool, avoiding the last 30 periods' problems.
-- **Joining**: accept the challenge rules, and optionally agree to join each day's list automatically after verifying.
+- **Joining**: accept the challenge rules and choose whether a verified completion joins that day's list: always, ask each time (the page asks right after verifying), or never.
 - **Account ownership**: the person adds a one-time token (valid 30 minutes) to their LeetCode profile ReadMe and the server reads it. One LeetCode account per person per challenge. No LeetCode password, cookie or code is ever collected. The account used for a period is locked at that period's first check.
 - **Completion**: the server looks for an Accepted submission of the period's exact problem, made during the period, among the locked account's recent Accepted submissions. A submission from before the period does not count. Results: verified, not found yet, cannot verify, data source unavailable, invalid request. "Not found" never means "did not solve it".
 - Checks are user-triggered, with a 60-second cooldown per person and a per-minute cap for the challenge. A check accepted before the period ends may finish up to 60 seconds after, for the old period only.
@@ -70,7 +70,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 
 ### Daily Check-in
 
-- Check in once per day (Los Angeles time). With "join the list when I check in" on (the default), checking in also joins that day's list; otherwise it only records the check-in, and joining is a separate action.
+- Check in once per day (Los Angeles time). With "Join this period's list automatically" set to always (the default), checking in also joins that day's list; with ask, the page offers "check in and join" and "just check in", and the server refuses a check-in without an answer; with never, it only records the check-in, and joining is a separate action.
 - Leave and rejoin as often as wanted within the day. The list closes at midnight.
 - Each person sees their own history and current streak; a day not yet checked in does not break the streak.
 
@@ -124,5 +124,6 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A28 | Someone is banned | Within five minutes they can only sign out or delete their data, and their card is gone from every list |
 | A29 | The database and avatar bucket are read directly | No email, profile field, contact, note, LeetCode username, ban reason or image appears in the clear |
 | A30 | A session row is inserted or edited without `DATA_KEY` | It signs no one in |
+| A31 | "Join this period's list automatically" is ask, never or always | Ask: nobody is listed or left off without an answer; never: completing the task never lists anyone, joining by hand still works; always: completing the task lists them |
 
 A LeetCode-backed launch also needs the positive and failure cases above run against the real data source; mocks alone do not show that completions can be verified.

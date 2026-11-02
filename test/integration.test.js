@@ -189,7 +189,7 @@ test("LeetCode list follows verification, leaving and withdrawal", async () => {
   const base = "/api/challenges/leetcode-daily";
   for (const u of ["a", "b"]) {
     await register(env, u);
-    assert.equal((await call(env, u, "POST", `${base}/enrollment`, { accept_rules: true, consent_auto_join: true })).status, 200);
+    assert.equal((await call(env, u, "POST", `${base}/enrollment`, { accept_rules: true, join_mode: "always" })).status, 200);
     assert.equal((await call(env, u, "POST", `${base}/binding/start`, { username: `${u}_ac` })).status, 200);
     assert.equal((await call(env, u, "POST", `${base}/binding/verify`, {})).data.result, "verified");
   }
@@ -204,6 +204,44 @@ test("LeetCode list follows verification, leaving and withdrawal", async () => {
   assert.equal((await members("a")).total, 1);
   await call(env, "b", "DELETE", `${base}/enrollment`);
   assert.equal((await members("a")).total, 0);
+});
+
+test("join this period's list automatically: always, ask or never, in both challenges", async () => {
+  const env = createEnv();
+  const ci = "/api/challenges/daily-checkin";
+  const lc = "/api/challenges/leetcode-daily";
+  for (const u of ["v", "a", "k", "n"]) await register(env, u);
+  await checkin(env, "v");
+  const listed = async () => emails((await ciMembers(env, "v")).members);
+
+  // Check-in: "always" (the default) lists you; "never" does not, but joining by hand works.
+  await checkin(env, "a");
+  assert.equal((await call(env, "n", "PUT", `${ci}/settings`, { join_mode: "never" })).status, 200);
+  await checkin(env, "n");
+  assert.deepEqual(await listed(), ["a"]);
+  assert.equal((await call(env, "n", "POST", `${ci}/periods/${today()}/membership`, {})).status, 200);
+  assert.deepEqual(await listed(), ["a", "n"]);
+  // "ask": a check-in without an answer is refused; the answer decides.
+  await call(env, "k", "PUT", `${ci}/settings`, { join_mode: "ask" });
+  assert.equal((await checkin(env, "k")).status, 400);
+  assert.equal((await call(env, "k", "POST", `${ci}/periods/${today()}/checkin`, { join: false })).status, 200);
+  assert.deepEqual(await listed(), ["a", "n"]);
+  assert.equal((await call(env, "k", "PUT", `${ci}/settings`, { join_mode: "sometimes" })).status, 400);
+
+  // LeetCode: only "always" joins on verification; "ask" says so in the answer.
+  const lcMembers = async (u) => emails((await call(env, u, "GET", `${lc}/periods/${today()}/members`)).data.members);
+  for (const [u, mode] of [["a", "always"], ["k", "ask"], ["n", "never"]]) {
+    assert.equal((await call(env, u, "POST", `${lc}/enrollment`, { accept_rules: true, join_mode: mode })).status, 200);
+    await call(env, u, "POST", `${lc}/binding/start`, { username: `${u}_ac` });
+    await call(env, u, "POST", `${lc}/binding/verify`, {});
+    const res = (await call(env, u, "POST", `${lc}/periods/${today()}/verify`, {})).data;
+    assert.equal(res.result, "verified");
+    assert.equal(res.ask_to_join, mode === "ask");
+  }
+  assert.equal((await call(env, "v", "POST", `${lc}/enrollment`, { accept_rules: true })).status, 400); // a choice is required
+  assert.equal((await call(env, "k", "POST", `${lc}/periods/${today()}/membership`, { confirm: true })).status, 200);
+  assert.deepEqual(await lcMembers("a"), ["k"]);
+  assert.equal((await call(env, "a", "GET", `${lc}/enrollment`)).data.enrollment.join_mode, "always");
 });
 
 test("home page returns a first page per relation and the rest through offset", async () => {
@@ -420,7 +458,7 @@ test("the database and R2 hold no personal data in the clear", async () => {
     avatar: up.data.avatar,
   });
   await checkin(env, "zz-secret-person");
-  await call(env, "zz-secret-person", "POST", `${base}/enrollment`, { accept_rules: true, consent_auto_join: true });
+  await call(env, "zz-secret-person", "POST", `${base}/enrollment`, { accept_rules: true, join_mode: "always" });
   await call(env, "zz-secret-person", "POST", `${base}/binding/start`, { username: "lcsecret_ac" });
   assert.equal((await call(env, "zz-secret-person", "POST", `${base}/binding/verify`, {})).data.result, "verified");
   assert.equal((await call(env, "zz-secret-person", "POST", `${base}/periods/${today()}/verify`, {})).data.result, "verified");

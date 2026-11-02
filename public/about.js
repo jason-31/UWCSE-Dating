@@ -23,7 +23,7 @@ const CONTENT = {
         h: "每期一份名单",
         p: [
           "每个挑战按自己的周期刷新任务，周期长短由挑战决定。比如 LeetCode 每日挑战一天一期，以后的挑战也可以一周一期。",
-          "完成当期任务并通过验证、同意自动入列后，你会进入这个挑战当期的名单。每个挑战的每一期都有独立的名单，只有同一期名单里的人能看到彼此；这一期结束，名单就关闭了。",
+          "完成当期任务并通过验证后，按你对“自动进入本期 list”的选择（总是加入、每次询问或总是不加入），你会进入这个挑战当期的名单。每个挑战的每一期都有独立的名单，只有同一期名单里的人能看到彼此；这一期结束，名单就关闭了。",
           "所以想认识新的人，就在每一期完成任务。没完成的人看不到名单，你也不会被他们看到。",
           "名单按入列时间排列，没有打分、推荐或排名算法。",
         ],
@@ -54,7 +54,7 @@ const CONTENT = {
       {
         h: "你始终可以",
         p: [
-          "退出当期名单；退出某个挑战；关闭自动入列，只做题不展示；或者注销账号，删除你在本站的全部数据。",
+          "退出当期名单；退出某个挑战；把“自动进入本期 list”设为总是不加入，只做题不展示；或者注销账号，删除你在本站的全部数据。",
           "登录使用你的 @cs.washington.edu 学校 Google 账号，只接受由 CSE 管理的账号。",
         ],
       },
@@ -83,7 +83,7 @@ const CONTENT = {
         h: "A new list every period",
         p: [
           "Each challenge refreshes its task on its own schedule. LeetCode Daily runs one period per day; a future challenge might run weekly.",
-          "Once you complete the current task, pass verification and opt in to auto-join, you're added to that challenge's list for the period. Every period of every challenge has its own list: only people on the same period's list can see each other, and the list closes when the period ends.",
+          "Once you complete the current task and pass verification, you join that challenge's list for the period as your \"Join this period's list automatically\" choice says: always, ask each time, or never. Every period of every challenge has its own list: only people on the same period's list can see each other, and the list closes when the period ends.",
           "So to meet new people, complete the task each period. People who haven't completed it can't see the list, and they can't see you.",
           "Lists are ordered by when people joined. There is no scoring, recommendation or ranking.",
         ],
@@ -112,7 +112,7 @@ const CONTENT = {
       {
         h: "You can always",
         p: [
-          "Leave the current list, leave a challenge, turn off auto-join and just solve, or delete your account and all your data here.",
+          "Leave the current list, leave a challenge, set \"Join this period's list automatically\" to never and just solve, or delete your account and all your data here.",
           "You sign in with your @cs.washington.edu school Google account; only accounts managed by CSE are accepted.",
         ],
       },
