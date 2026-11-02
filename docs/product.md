@@ -2,7 +2,7 @@
 
 What UWCSE.date does and must keep doing. The module guide ([challenge.md](challenge.md)) covers how a challenge is built; the oversight rules ([oversight.md](oversight.md)) cover who can see what behind the scenes. Where this document and the code disagree, one of them has a bug.
 
-The site lets people who completed the same task on the same day, and who want the same kind of relationship, find each other and reach out through contact details they chose to share. It does not host conversations.
+UWCSE.date is an unofficial site run independently by an individual; it is not a service of the Paul G. Allen School or the University of Washington, and the About page says so first. The site lets people who completed the same task on the same day, and who want the same kind of relationship, find each other and reach out through contact details they chose to share. It does not host conversations.
 
 ## Accounts
 
@@ -50,7 +50,7 @@ Rules every challenge follows:
 
 - **The same task for everyone in a period.** The task depends only on the challenge's configuration and the period, is fixed once drawn, and is never re-drawn for anyone.
 - **Completion is decided by the server** from evidence it obtains itself. Screenshots, self-reports and client-supplied data prove nothing.
-- **Explicit consent to be listed**: an opt-in to auto-join, or an action that is itself a request to be listed (checking in).
+- **Explicit consent to be listed.** Every challenge offers the same per-person choice, "Join this period's list automatically": always, ask each time, or never. Joining by hand stays possible with never.
 - **Browsing a list requires being on it**, actively, with a complete profile. A list closes when its period ends (a challenge may allow a short look-back for that period's members).
 - Leaving a list is always possible. Challenges never read each other's data, and nothing earned in one counts in another.
 
@@ -59,25 +59,25 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 ### LeetCode Daily
 
 - **Period**: a calendar day in Los Angeles time. **Problem**: drawn once per period at random from the free Easy and Medium problems of the configured pool, avoiding the last 30 periods' problems.
-- **Joining**: accept the challenge rules, and optionally agree to join each day's list automatically after verifying.
+- **Joining**: accept the challenge rules and choose whether a verified completion joins that day's list: always, ask each time (the page asks right after verifying), or never.
 - **Account ownership**: the person adds a one-time token (valid 30 minutes) to their LeetCode profile ReadMe and the server reads it. One LeetCode account per person per challenge. No LeetCode password, cookie or code is ever collected. The account used for a period is locked at that period's first check.
 - **Completion**: the server looks for an Accepted submission of the period's exact problem, made during the period, among the locked account's recent Accepted submissions. A submission from before the period does not count. Results: verified, not found yet, cannot verify, data source unavailable, invalid request. "Not found" never means "did not solve it".
 - Checks are user-triggered, with a 60-second cooldown per person and a per-minute cap for the challenge. A check accepted before the period ends may finish up to 60 seconds after, for the old period only.
 - Verifying proves that an Accepted submission exists on that account. It does not prove the person solved the problem alone.
 - Leaving today's list is possible at any time; checking again does not put someone back, rejoining is a separate, explicit action.
-- **Data source**: LeetCode offers no official API, and its terms restrict automated access. Until there is written permission, verification can be paused (`verification.paused`) or the challenge disabled; lists and history keep working while paused.
+- **Data source**: LeetCode's GraphQL endpoint. Verification can be paused (`verification.paused`) without affecting lists and history.
 - Badges and a look-back at yesterday's list are implemented but switched off.
 
 ### Daily Check-in
 
-- Check in once per day (Los Angeles time). With "join the list when I check in" on (the default), checking in also joins that day's list; otherwise it only records the check-in, and joining is a separate action.
+- Check in once per day (Los Angeles time). With "Join this period's list automatically" set to always (the default), checking in also joins that day's list; with ask, the page offers "check in and join" and "just check in", and the server refuses a check-in without an answer; with never, it only records the check-in, and joining is a separate action.
 - Leave and rejoin as often as wanted within the day. The list closes at midnight.
 - Each person sees their own history and current streak; a day not yet checked in does not break the streak.
 
 ## Moderation
 
 - Bans are made from the command line (`scripts/ban.mjs`) and applied by the Worker within five minutes. There is no admin UI, and no list of banned emails can be read back.
-- Still to come: a published contact address and a per-viewer block list.
+- Contact for questions, reports and data requests: chines_cells_9s@icloud.com (in the privacy notice). Still to come: a per-viewer block list.
 
 ## Data kept and for how long
 
@@ -124,5 +124,6 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A28 | Someone is banned | Within five minutes they can only sign out or delete their data, and their card is gone from every list |
 | A29 | The database and avatar bucket are read directly | No email, profile field, contact, note, LeetCode username, ban reason or image appears in the clear |
 | A30 | A session row is inserted or edited without `DATA_KEY` | It signs no one in |
+| A31 | "Join this period's list automatically" is ask, never or always | Ask: nobody is listed or left off without an answer; never: completing the task never lists anyone, joining by hand still works; always: completing the task lists them |
 
 A LeetCode-backed launch also needs the positive and failure cases above run against the real data source; mocks alone do not show that completions can be verified.

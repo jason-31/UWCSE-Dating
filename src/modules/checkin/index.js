@@ -1,9 +1,11 @@
 import { HttpError, L, json, localize, readJson } from "../../platform/http.js";
 import { periodAt, addDays, isPeriodId } from "../../platform/period.js";
+import { joinModeFrom } from "../../platform/join-mode.js";
 
 // Daily check-in: the period's task is simply to check in; there is no external evidence to
 // verify. Whether checking in also puts you on that period's list is a per-user setting
-// (auto_join, on by default, shown before you check in); with it off you join the list by hand.
+// (join_mode, src/platform/join-mode.js; "always" by default, shown before you check in): with
+// "ask" the check-in itself carries the answer, with "never" you can still join by hand.
 // Lists are per period and close when the period ends.
 
 const MODULE_VERSION = 1;
@@ -24,8 +26,8 @@ const manifest = {
 
 const RULES_TEXT = [
   L(
-    "每天（按本挑战时区 0 点起）为一期。开启“签到后自动加入名单”时（默认开启），签到即表示你愿意出现在当期名单里，并会按你的个人资料展示；关闭后只记录签到，可以之后手动加入。",
-    "Each day (from midnight in this challenge's time zone) is one period. With \"join the list when I check in\" on (the default), checking in means you want to appear on that period's list, shown according to your profile; with it off, only the check-in is recorded and you can join by hand.",
+    "每天（按本挑战时区 0 点起）为一期。“自动进入本期 list”可选总是加入（默认）、每次询问或总是不加入。进入名单表示你愿意出现在当期名单里，并会按你的个人资料展示；不进入时只记录签到，之后可以手动加入。",
+    "Each day (from midnight in this challenge's time zone) is one period. \"Join this period's list automatically\" can be always (the default), ask each time, or never. Being on the list means you want to appear on it, shown according to your profile; otherwise only the check-in is recorded and you can join by hand later.",
   ),
   L(
     "只有当期已签到并在名单中的人能浏览名单，且只能看到与自己寻找相同关系的成员。",
@@ -75,26 +77,26 @@ function requirePeriodId(pid) {
 
 // The user's check-in preferences, with defaults for anyone who never changed them.
 async function getSettings(ctx) {
-  const row = await ctx.db.prepare("SELECT auto_join FROM ci_settings WHERE challenge_id = ?1 AND user_id = ?2", ctx.userId).first();
-  return { auto_join: row ? row.auto_join === 1 : true };
+  const row = await ctx.db.prepare("SELECT join_mode FROM ci_settings WHERE challenge_id = ?1 AND user_id = ?2", ctx.userId).first();
+  return { join_mode: row?.join_mode ?? "always" };
 }
 
 async function putSettings(ctx, request) {
   const body = await readJson(request);
-  if (typeof body.auto_join !== "boolean") throw new HttpError(400, "invalid_request", L("设置不合法", "Invalid settings"));
+  const mode = joinModeFrom(body.join_mode);
   await ctx.db
     .prepare(
-      `INSERT INTO ci_settings (challenge_id, user_id, auto_join, updated_at) VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT (challenge_id, user_id) DO UPDATE SET auto_join = excluded.auto_join, updated_at = excluded.updated_at`,
+      `INSERT INTO ci_settings (challenge_id, user_id, join_mode, updated_at) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT (challenge_id, user_id) DO UPDATE SET join_mode = excluded.join_mode, updated_at = excluded.updated_at`,
       ctx.userId,
-      body.auto_join ? 1 : 0,
+      mode,
       ctx.now,
     )
     .run();
   return reply(ctx, { ok: true, settings: await getSettings(ctx) });
 }
 
-// status "left" means checked in but not on the list: the user left it, or auto_join was off.
+// status "left" means checked in but not on the list: the user left it, or chose not to join.
 async function myCheckin(ctx, periodId) {
   return ctx.db
     .prepare(
@@ -165,11 +167,17 @@ async function requireCurrentAndProfile(ctx, periodId) {
   }
 }
 
-// Check in for the current period; joins the list only if auto_join is on. Checking in again
-// changes nothing.
-async function checkIn(ctx, periodId) {
+// Check in for the current period. Joins the list with join_mode "always", or with "ask" when
+// the request says { join: true }; "ask" without an answer is refused, so nobody is listed (or
+// left off) by accident. Checking in again changes nothing.
+async function checkIn(ctx, periodId, request) {
   await requireCurrentAndProfile(ctx, periodId);
-  const { auto_join: autoJoin } = await getSettings(ctx);
+  const body = await readJson(request);
+  const { join_mode: mode } = await getSettings(ctx);
+  if (mode === "ask" && typeof body.join !== "boolean") {
+    throw new HttpError(400, "invalid_request", L("请选择是否进入本期 list", "Choose whether to join this period's list"));
+  }
+  const listed = mode === "always" || (mode === "ask" && body.join);
   await ctx.db.batch([
     ctx.db.prepare(
       `INSERT INTO ci_checkins (challenge_id, period_id, user_id, member_id, status, checked_in_at)
@@ -178,20 +186,20 @@ async function checkIn(ctx, periodId) {
       periodId,
       ctx.userId,
       crypto.randomUUID(),
-      autoJoin ? "active" : "left",
+      listed ? "active" : "left",
       ctx.now,
     ),
     ctx.lists.changed(periodId),
   ]);
   return reply(ctx, {
     ok: true,
-    message: autoJoin
-      ? L("签到成功，已加入本期名单！", "Checked in and added to this period's list!")
+    message: listed
+      ? L("签到成功，已进入本期 list！", "Checked in and added to this period's list!")
       : L("签到成功！", "Checked in!"),
   });
 }
 
-// Join the current period's list after checking in (auto_join off, or after leaving).
+// Join the current period's list after checking in (not joined at check-in, or after leaving).
 async function join(ctx, periodId) {
   await requireCurrentAndProfile(ctx, periodId);
   const [res] = await ctx.db.batch([
@@ -292,7 +300,7 @@ async function handleRequest(request, ctx, parts) {
   }
   if (a === "periods" && b && parts.length === 3) {
     const pid = requirePeriodId(b);
-    if (c === "checkin" && m === "POST") return checkIn(ctx, pid);
+    if (c === "checkin" && m === "POST") return checkIn(ctx, pid, request);
     if (c === "membership" && m === "POST") return join(ctx, pid);
     if (c === "membership" && m === "DELETE") return leave(ctx, pid);
     if (c === "members" && m === "GET") return getMembers(ctx, pid, url);

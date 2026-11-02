@@ -2,7 +2,9 @@
 
 A small social site for the UW Allen School community. Members take part in daily challenges: a check-in, or one LeetCode problem that is the same for everyone. Everyone on a day's list who is looking for the same kind of relationship (friendship, a study buddy, or dating) can see each other's cards, with the contact details each person chose to share.
 
-The site is in a closed beta at https://uwcse.date.
+UWCSE.date is an unofficial site run independently by an individual. It is not a service of the Paul G. Allen School or the University of Washington and is not managed or endorsed by them.
+
+The site is in a closed beta at https://uwcse.date. Contact: chines_cells_9s@icloud.com.
 
 ## How it works
 
@@ -18,6 +20,7 @@ The full product rules and acceptance scenarios are in [docs/product.md](docs/pr
 
 - Everything that identifies or describes a person is encrypted at rest, under keys derived from the `DATA_KEY` Worker secret, and rows are found by keyed hashes. Reading the database or the avatar bucket directly yields ciphertext, hashes and metadata only.
 - There is no admin UI or endpoint that lists or shows profiles, and logs never contain personal data (both are tested).
+- The privacy notice shown on the site (`/#/privacy`, source in `public/privacy.js`) tells users what is stored, who can see it, how long it is kept and what is not protected yet.
 - [docs/oversight.md](docs/oversight.md) sets out the goal and the rules: open source, deployment only from public CI, a key nobody holds, a published operator audit log and a verifiable front end. Several rules are not implemented yet; that document says which, and the site makes no claims based on them until they are.
 
 ## Stack

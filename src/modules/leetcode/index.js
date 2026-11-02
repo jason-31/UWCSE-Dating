@@ -1,6 +1,7 @@
 import { HttpError, L, json, localize, readJson } from "../../platform/http.js";
 import { periodAt, periodBounds, addDays, isPeriodId } from "../../platform/period.js";
 import { getProvider, findEvidence, aboutContainsToken, ProviderError } from "./provider.js";
+import { joinModeFrom } from "../../platform/join-mode.js";
 import poolV1 from "./pool-v1.js";
 
 const MODULE_VERSION = 1;
@@ -45,8 +46,8 @@ const RULES_TEXT = [
     "Completion is checked by the server against the data source. Screenshots, self-reports and uploads do not count.",
   ),
   L(
-    "同意自动入列后，验证通过即按你的个人资料加入当期名单。只有入列的人能浏览名单，且只能看到与自己寻找相同关系的成员。",
-    "If you opt in to auto-join, a verified completion adds you to that period's list using your profile. Only people on the list can browse it, and only members looking for a relationship type you share are shown.",
+    "“自动进入本期 list”可选总是加入、每次询问或总是不加入；选总是加入时，验证通过即按你的个人资料进入当期名单。只有在名单里的人能浏览名单，且只能看到与自己寻找相同关系的成员。",
+    "\"Join this period's list automatically\" can be always, ask each time, or never; with always, a verified completion puts you on that period's list using your profile. Only people on the list can browse it, and only members looking for a relationship type you share are shown.",
   ),
   L(
     "本站不提供站内消息，只展示你主动开放的联系方式。你可以随时退出当期展示或退出本挑战。",
@@ -111,7 +112,7 @@ function readiness(ctx, state) {
     // Site-wide profile; this challenge only learns whether it is complete.
     profile_complete: state.profile.complete,
     enrolled,
-    consent_auto_join: enrolled && state.enrollment.consent_auto_join === 1,
+    join_mode: enrolled ? state.enrollment.join_mode : null,
     binding_verified: bindingVerified,
     can_verify: enrolled && state.profile.complete && bindingVerified,
   };
@@ -253,8 +254,8 @@ async function getEnrollment(ctx) {
     rules: RULES_TEXT,
     enrollment: state.enrollment && {
       status: state.enrollment.status,
-      consent_auto_join: state.enrollment.consent_auto_join === 1,
-      consent_at: state.enrollment.consent_at,
+      join_mode: state.enrollment.join_mode,
+      join_mode_at: state.enrollment.join_mode_at,
     },
     binding: state.binding && {
       site: state.binding.site,
@@ -279,18 +280,17 @@ async function postEnrollment(ctx, request) {
   if (!state.profile.complete) {
     throw new HttpError(400, "profile_incomplete", L("请先补齐个人资料", "Please complete your profile first"), { missing_fields: state.profile.missing_fields });
   }
-  const consent = body.consent_auto_join === true ? 1 : 0;
+  const mode = joinModeFrom(body.join_mode);
   await ctx.db.batch([
     ctx.db.prepare(
-      `INSERT INTO lc_enrollments (challenge_id, user_id, member_id, status, consent_auto_join, consent_at, created_at, updated_at)
-       VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?6, ?6)
+      `INSERT INTO lc_enrollments (challenge_id, user_id, member_id, status, join_mode, join_mode_at, created_at, updated_at)
+       VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?5, ?5)
        ON CONFLICT (challenge_id, user_id) DO UPDATE SET
-         status = 'active', consent_auto_join = excluded.consent_auto_join,
-         consent_at = excluded.consent_at, updated_at = excluded.updated_at`,
+         status = 'active', join_mode = excluded.join_mode,
+         join_mode_at = excluded.join_mode_at, updated_at = excluded.updated_at`,
       ctx.userId,
       crypto.randomUUID(),
-      consent,
-      consent ? ctx.now : null,
+      mode,
       ctx.now,
     ),
     // The lists only show members whose enrollment is active.
@@ -306,7 +306,7 @@ async function deleteEnrollment(ctx, url) {
   }
   await ctx.db.batch([
     ctx.db.prepare(
-      `UPDATE lc_enrollments SET status = 'withdrawn', consent_auto_join = 0, updated_at = ?3
+      `UPDATE lc_enrollments SET status = 'withdrawn', join_mode = 'never', updated_at = ?3
        WHERE challenge_id = ?1 AND user_id = ?2`,
       ctx.userId,
       ctx.now,
@@ -670,12 +670,13 @@ async function verifyPeriod(ctx, periodId, request) {
       attempt.id,
       ctx.now,
     ),
-    // Auto-join only with consent; an existing row (including one the user left) is kept as is.
+    // Joins only with join_mode "always"; an existing row (including one the user left) is kept as
+    // is. With "ask", the response below asks the client to offer joining.
     ctx.db.prepare(
       `INSERT OR IGNORE INTO lc_memberships (challenge_id, period_id, user_id, status, joined_at)
        SELECT ?1, ?2, ?3, 'active', ?4
        WHERE ?5 = 1 AND EXISTS (
-         SELECT 1 FROM lc_enrollments WHERE challenge_id = ?1 AND user_id = ?3 AND status = 'active' AND consent_auto_join = 1)`,
+         SELECT 1 FROM lc_enrollments WHERE challenge_id = ?1 AND user_id = ?3 AND status = 'active' AND join_mode = 'always')`,
       periodId,
       ctx.userId,
       ctx.now,
@@ -685,7 +686,10 @@ async function verifyPeriod(ctx, periodId, request) {
   if (cfg.badges.enabled) stmts.push(...badgeStatements(ctx, periodId));
   stmts.push(ctx.lists.changed(periodId));
   await ctx.db.batch(stmts);
-  return verifyResult(ctx, "verified", L("验证通过！", "Verified!"), { evidence: { accepted_at: ev.accepted_at, source: provider.id } });
+  return verifyResult(ctx, "verified", L("验证通过！", "Verified!"), {
+    evidence: { accepted_at: ev.accepted_at, source: provider.id },
+    ask_to_join: state.enrollment.join_mode === "ask",
+  });
 }
 
 function badgeStatements(ctx, periodId) {

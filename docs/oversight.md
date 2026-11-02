@@ -52,7 +52,7 @@ This goal is deliberately narrower than "operators can see nothing". A matching 
 | Production runs this code | Deployment entries in the published audit log match CI runs on `main`; no other deployments appear |
 | No one can read the encryption key | The key-provisioning workflow is public and never prints the key; the audit log shows no later writes to `DATA_KEY` |
 | The frontend is unmodified | Run the frontend check script against the live site |
-| No one can log in as other people | Session rows carry a tag only the Worker can make (TODO: session integrity), and the published audit log shows no Access identity-provider, policy or service-token changes and no Google OAuth client changes |
+| No one can log in as other people | Session rows are sealed with `DATA_KEY`, so only the Worker can create one, and the published audit log shows no Access identity-provider, policy or service-token changes and no Google OAuth client changes |
 | No standing data access | The published audit log shows when API tokens are created and deleted |
 
 ## Known gaps
@@ -83,7 +83,7 @@ Planned work, roughly in order. Each item, when done, should link the code that 
 - [x] **Development-mode guard (rule 4):** `DEV_MODE` only counts for requests to `localhost`, `127.0.0.1` or `[::1]` (`effectiveEnv` in `src/platform/auth.js`); identity is never taken from an unverified header.
 - [x] **Public repository (rule 1):** https://github.com/jason-31/UWCSE-Dating, licensed AGPL-3.0.
 - [ ] **CI deployment workflow (rule 2):** `.github/workflows/deploy.yml` deploys on push to `main` only, from a GitHub environment restricted to `main`, with a token scoped as in [deploy.md](deploy.md). Done once that environment is set up, `main` is protected and nobody keeps a local `wrangler` login.
-- [ ] **Key-provisioning workflow (rule 6):** `.github/workflows/provision-key.yml`, manual dispatch; generates 32 random bytes and pipes them into `wrangler secret put DATA_KEY`; refuses if the secret already exists. Done once it has created the production key.
+- [x] **Key-provisioning workflow (rule 6):** `.github/workflows/provision-key.yml`, manual dispatch; generates 32 random bytes and pipes them into `wrangler secret put DATA_KEY`; refuses if the secret already exists. It created the production key on 2026-11-01 (run 41380593119).
 - [x] **No-personal-data logging test (rule 8):** `test/integration.test.js` ("logs carry no personal data") captures every log line through registration, list views, a failing rate limiter, an unhandled error whose message quotes an email and contact details, and a failing clean-up, and checks that none of that data appears. Unhandled errors are logged by type and stack frames only, never by message (`errorResponse` in `src/platform/http.js`).
 - [ ] **Audit-log publisher (rule 9):**
   - First verify which events Cloudflare's account audit log covers, especially D1 queries, R2 reads, `wrangler tail`, dashboard sign-ins and API tokens created by members (tokens belong to users and may only appear in the user's own log).
@@ -91,7 +91,7 @@ Planned work, roughly in order. Each item, when done, should link the code that 
   - It appends entries to the watcher's public repository with actor IP and user agent removed, and opens an issue for anything that needs explaining: a deployment without a matching CI run on `main`, a secret change, a new API token, a member or role change, an Access, route or DNS change. A failing or missing run is itself reported.
   - Revoking the token or removing the watcher stops publication, which shows as a gap.
 - [x] **Frontend check script (rule 11):** `node scripts/check-frontend.mjs <site url> [commit]` fetches every file under `public/` at that commit from the live site and compares it byte for byte. While the site is behind Access it needs an Access service token (see the script).
-- [ ] **Privacy notice (rule 12).**
+- [x] **Privacy notice (rule 12):** `public/privacy.js`, linked from the header for everyone and from the registration form. It lists what is stored, who can see what, how long it is kept, the contact address and the known gaps. Update it whenever any of those changes.
 - [ ] **Known gap 1:** choose and implement a mitigation for what sealing leaves (list rows, deletions, rollback of one's own profile).
 - [ ] **Known gap 2:** reduce stored timestamps.
 
@@ -120,5 +120,4 @@ Still open, roughly in order:
 - [ ] **Orientation inference that remains by design:** with the re-registration bypass closed, members of different genders can still pool what they see. Decide whether to cap newly seen cards per viewer per day, or to move ROMANCE to mutual opt-in. Cover it in the privacy notice (rule 12).
 - [ ] **Avatar delivery:** every uploaded avatar shown is a Worker request. Serve them from a cacheable path (with the planned signed URLs on stable time buckets) so a cold-cache home view does not cost hundreds of invocations.
 - [ ] **Quota alerts:** notifications at 50% and 80% of the daily Workers and D1 limits (the in-app "daily capacity reached" message is done).
-- [ ] **Moderation path that needs no D1 token:** bans are already applied by the Worker from a queue, but queuing one still takes D1 write access. Still needed: a narrow, audited way to queue them (rule 2), a published contact address and a per-viewer block list.
-- [ ] **LeetCode permission:** written permission for the GraphQL data source, or launch with `verification.paused: true` or LeetCode Daily disabled.
+- [ ] **Moderation path that needs no D1 token:** bans are already applied by the Worker from a queue, but queuing one still takes D1 write access. Still needed: a narrow, audited way to queue them (rule 2) and a per-viewer block list. (The contact address is published in the privacy notice.)

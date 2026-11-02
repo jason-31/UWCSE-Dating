@@ -1,5 +1,6 @@
 import { h, fill, api, fmtTime, toast, ApiError } from "/lib.js";
 import { makeT } from "/i18n.js";
+import { joinModeField } from "/join-mode.js";
 import { personCard } from "/card.js";
 
 const t = makeT({
@@ -18,8 +19,6 @@ const t = makeT({
     accept_challenge_rules: "请先同意本挑战规则",
     challenge_rules: "本挑战规则",
     accept_rules: " 我已阅读并同意以上规则",
-    consent: " 完成本挑战任务后，按我的个人资料自动加入对应周期名单",
-    consent_hint: "不勾选也可以做题和验证，但不会出现在名单里，也不能浏览名单。",
     withdrawn_hint: "你之前退出过本挑战，重新确认即可恢复参加。",
     lc_username: "LeetCode 用户名",
     regen_token: "重新生成令牌",
@@ -47,7 +46,8 @@ const t = makeT({
     see_members: "去看看本期成员 →",
     join: "加入本期展示",
     left_list: "你已退出本期展示。",
-    not_auto_joined: "你没有自动入列（未同意自动入列）。",
+    ask_join: "要进入本期 list 吗？进入后，和你有共同寻找关系的人能看到你，你也能浏览本期名单。",
+    not_auto_joined: "你设置了不自动进入本期 list，需要的话可以手动加入。",
     verify_intro: "在 LeetCode 上用已绑定账号 AC 这道题后，点击下面的按钮让服务器核对。",
     last_check: "上次检查：{time} · {result}",
     period_line: "第 {id} 期 · {start} – {end}（{tz}）",
@@ -66,17 +66,15 @@ const t = makeT({
     no_members: "暂时还没有与你意向重合的成员，晚点再来看看。",
     prev: "上一页",
     next: "下一页",
-    auto_on: "已开启自动入列",
-    auto_off: "已关闭自动入列（不影响本期已有展示）",
+    saved: "已保存（不影响本期已有的展示）",
     withdraw: "退出本挑战",
-    withdraw_confirm: "退出后你会从所有本挑战名单中撤下，并停止自动入列。账号绑定会保留，之后可以重新报名。确定吗？",
+    withdraw_confirm: "退出后你会从所有本挑战名单中撤下，以后也不会再自动进入 list。账号绑定会保留，之后可以重新报名。确定吗？",
     purge: "删除我在本挑战的全部数据",
     purge_confirm: "将删除你在本挑战的账号绑定、完成记录和名单资格（个人资料不受影响），无法恢复。确定吗？",
     profile: "个人资料",
     profile_hint: "昵称、头像、寻找的关系和联系方式是全站通用的个人资料。",
     edit_profile: "编辑个人资料 →",
     participation: "参加设置",
-    auto_join: " 完成任务后自动加入当期名单",
     my_completions: "我的完成记录",
     col_period: "周期",
     col_problem: "题目",
@@ -102,8 +100,6 @@ const t = makeT({
     accept_challenge_rules: "Please accept the challenge rules first",
     challenge_rules: "Challenge rules",
     accept_rules: " I have read and accept these rules",
-    consent: " After I complete a task, add me to that period's list using my profile",
-    consent_hint: "You can still solve and verify without this, but you won't appear on or be able to browse the list.",
     withdrawn_hint: "You left this challenge earlier; confirm again to rejoin.",
     lc_username: "LeetCode username",
     regen_token: "Generate a new token",
@@ -131,7 +127,8 @@ const t = makeT({
     see_members: "See who else is here →",
     join: "Join this period's list",
     left_list: "You left this period's list.",
-    not_auto_joined: "You weren't added automatically (auto-join is off).",
+    ask_join: "Join this period's list? People who share a relationship type with you will see you, and you can browse the list.",
+    not_auto_joined: "You chose not to join this period's list automatically; you can join by hand.",
     verify_intro: "Get this problem Accepted with your bound account on LeetCode, then press the button below so the server can check.",
     last_check: "Last check: {time} · {result}",
     period_line: "Period {id} · {start} – {end} ({tz})",
@@ -150,17 +147,15 @@ const t = makeT({
     no_members: "No one with an overlapping goal yet. Check back later.",
     prev: "Previous",
     next: "Next",
-    auto_on: "Auto-join turned on",
-    auto_off: "Auto-join turned off (this period's list is unaffected)",
+    saved: "Saved (this period's list is unaffected)",
     withdraw: "Leave this challenge",
-    withdraw_confirm: "You'll be removed from all of this challenge's lists and auto-join stops. Your account binding is kept, so you can rejoin later. Continue?",
+    withdraw_confirm: "You'll be removed from all of this challenge's lists and won't join any automatically. Your account binding is kept, so you can rejoin later. Continue?",
     purge: "Delete all my data in this challenge",
     purge_confirm: "This deletes your account binding, completions and list memberships in this challenge (your profile is kept). This cannot be undone. Continue?",
     profile: "Profile",
     profile_hint: "Nickname, avatar, what you're looking for and contact details are part of your site-wide profile.",
     edit_profile: "Edit profile →",
     participation: "Participation",
-    auto_join: " Automatically join the period's list after completing the task",
     my_completions: "My completions",
     col_period: "Period",
     col_problem: "Problem",
@@ -240,7 +235,8 @@ export async function mount(root, { challengeId, challenge }) {
 
   function consentPanel() {
     const accept = h("input", { type: "checkbox" });
-    const consent = h("input", { type: "checkbox", checked: enrollment.enrollment?.consent_auto_join ?? true });
+    let joinMode = enrollment.enrollment?.join_mode ?? "always";
+    const joinChoice = joinModeField(joinMode, (mode) => (joinMode = mode));
     const btn = h("button", { class: "primary" }, t("enroll"));
     btn.onclick = async () => {
       if (!accept.checked) return toast(t("accept_challenge_rules"), "warn");
@@ -248,7 +244,7 @@ export async function mount(root, { challengeId, challenge }) {
       try {
         await api(`${base}/enrollment`, {
           method: "POST",
-          body: { accept_rules: true, consent_auto_join: consent.checked },
+          body: { accept_rules: true, join_mode: joinMode },
         });
         location.hash = `#/c/${challengeId}/today`;
         await refresh();
@@ -263,8 +259,7 @@ export async function mount(root, { challengeId, challenge }) {
       h("h2", {}, t("challenge_rules")),
       h("ul", { class: "rules" }, enrollment.rules.map((r) => h("li", {}, r))),
       h("label", { class: "check" }, accept, t("accept_rules")),
-      h("label", { class: "check" }, consent, t("consent")),
-      h("p", { class: "muted small" }, t("consent_hint")),
+      joinChoice,
       enrollment.enrollment?.status === "withdrawn" && h("p", { class: "muted small" }, t("withdrawn_hint")),
       btn,
     );
@@ -414,7 +409,7 @@ export async function mount(root, { challengeId, challenge }) {
           }
         };
         rows.push(
-          h("p", { class: "muted" }, m?.status === "left" ? t("left_list") : t("not_auto_joined")),
+          h("p", { class: "muted" }, m?.status === "left" ? t("left_list") : cur.readiness.join_mode === "ask" ? t("ask_join") : t("not_auto_joined")),
           join,
         );
       }
@@ -502,15 +497,16 @@ export async function mount(root, { challengeId, challenge }) {
 
   async function settingsView(view) {
     const e = enrollment.enrollment;
-    const consent = h("input", { type: "checkbox", checked: e.consent_auto_join });
-    consent.onchange = async () => {
+    const joinChoice = joinModeField(e.join_mode, async (mode) => {
       try {
-        await api(`${base}/enrollment`, { method: "POST", body: { accept_rules: true, consent_auto_join: consent.checked } });
-        toast(consent.checked ? t("auto_on") : t("auto_off"), "ok");
+        await api(`${base}/enrollment`, { method: "POST", body: { accept_rules: true, join_mode: mode } });
+        e.join_mode = mode;
+        toast(t("saved"), "ok");
       } catch (err) {
         toast(err.message, "error");
+        throw err;
       }
-    };
+    });
     const withdraw = h("button", {}, t("withdraw"));
     withdraw.onclick = async () => {
       if (!confirm(t("withdraw_confirm"))) return;
@@ -537,7 +533,7 @@ export async function mount(root, { challengeId, challenge }) {
         "section",
         { class: "panel" },
         h("h2", {}, t("participation")),
-        h("label", { class: "check" }, consent, t("auto_join")),
+        joinChoice,
         h("div", { class: "row" }, withdraw, purge),
       ),
     );

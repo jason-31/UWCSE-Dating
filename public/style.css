@@ -124,6 +124,7 @@ a.button.primary:hover { filter: brightness(1.12); }
 
 .about { max-width: 720px; margin: 8px auto 16px; }
 .about .lead { font-size: 17px; }
+.about .unofficial { padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--field); font-weight: 600; }
 .about section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
 .about h2 { font-size: 18px; }
 
@@ -201,7 +202,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .counter.over { color: var(--error); font-weight: 600; }
 .relation-block .filter-title { margin-top: 10px; font-weight: 600; }
 .relation-block .filter-label { min-width: 3em; }
-.form .field > label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--heading); }
+.form .field > label, .join-mode > label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--heading); }
 .vis { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {

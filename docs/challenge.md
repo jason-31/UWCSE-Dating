@@ -266,7 +266,7 @@ A module with a non-daily schedule (e.g. weekly) can define its own period ids a
 
 - **Same task for everyone in a period.** The task is derived only from the challenge config and the period. Nothing about the requesting user may change it, and nobody can re-roll it. If it is generated, persist it once per period using a primary key and `INSERT OR IGNORE`, then re-read it (see `ensurePeriod` in the LeetCode module).
 - **Server-side completion.** Decide completion on the server. Never accept screenshots or client claims as proof.
-- **Explicit consent to be listed.** Only add a user to a list with explicit consent: an auto-join opt-in, or an action that is itself a request to be listed (check-in).
+- **Explicit consent to be listed.** Store each person's "Join this period's list automatically" choice (`always`, `ask`, `never`; validate with `joinModeFrom` from `platform/join-mode.js`) and list them on completion only as it says. With `ask`, take the answer with the completing action or offer joining right after it; with `never`, keep joining by hand possible. Show the choice with `joinModeField` from `public/join-mode.js`, so it reads the same in every challenge.
 - **Browsing requires membership.** Only active members of a period may browse that period's list, and the list closes when its period ends. An optional look-back must be limited to members of that period.
 - **Cards only from `ctx.profiles.cards`.** Drop `null` results, never return `user_id` to the browser, and use a per-challenge opaque `member_id` instead.
 - **Lists through `ctx.lists`.** Read member lists with `ctx.lists.cached`, and bump them with `ctx.lists.changed` in the same batch as every write to list rows.

@@ -1,5 +1,6 @@
 import { h, fill, api, fmtTime, toast, ApiError } from "/lib.js";
 import { makeT } from "/i18n.js";
+import { joinModeField, joinModeHint } from "/join-mode.js";
 import { personCard } from "/card.js";
 
 const t = makeT({
@@ -10,12 +11,10 @@ const t = makeT({
     tab_history: "我的签到",
     tab_settings: "签到设置",
     participation: "参加设置",
-    auto_join: " 签到后自动加入当期名单",
-    auto_join_note: "关闭后，签到只记录签到和连续天数，不会出现在名单里，也不能浏览名单；可以在今日签到页手动加入。修改从下次签到开始生效。",
-    auto_on: "已开启：签到后自动加入名单",
-    auto_off: "已关闭：签到后不会自动加入名单",
-    auto_join_on_hint: "签到后会自动加入本期名单。",
-    auto_join_off_hint: "签到后不会加入名单，之后可以手动加入。",
+    join_mode_note: "修改从下次签到开始生效。不进入 list 时，签到只记录签到和连续天数。",
+    saved: "已保存",
+    check_in_join: "签到并进入本期 list",
+    check_in_only: "只签到",
     change_setting: "修改设置",
     checked_in_only: "✓ 你在 {time} 签到了。",
     not_on_list: "你目前不在本期名单中，看不到其他成员，别人也看不到你。",
@@ -64,12 +63,10 @@ const t = makeT({
     tab_history: "My check-ins",
     tab_settings: "Settings",
     participation: "Participation",
-    auto_join: " Join this period's list when I check in",
-    auto_join_note: "With this off, checking in only records the check-in and your streak: you won't be on the list and can't browse it, but you can join from the Today page. Changes apply from your next check-in.",
-    auto_on: "On: checking in also joins the list",
-    auto_off: "Off: checking in won't join the list",
-    auto_join_on_hint: "Checking in also adds you to this period's list.",
-    auto_join_off_hint: "Checking in won't add you to the list; you can join afterwards.",
+    join_mode_note: "Changes apply from your next check-in. Without joining, a check-in only counts toward your streak.",
+    saved: "Saved",
+    check_in_join: "Check in and join this period's list",
+    check_in_only: "Just check in",
     change_setting: "Change",
     checked_in_only: "✓ You checked in at {time}.",
     not_on_list: "You're not on this period's list, so you can't see the others and they can't see you.",
@@ -153,11 +150,12 @@ export async function mount(root, { challengeId, challenge }) {
     const ci = cur.checkin;
     const periodUrl = `${base}/periods/${p.period_id}`;
 
-    // POST checkin, or POST membership to join the list after checking in.
-    const act = async (btn, path) => {
+    // POST checkin, or POST membership to join the list after checking in. With join mode "ask",
+    // the check-in carries the answer ({ join }).
+    const act = async (btn, path, body = {}) => {
       btn.disabled = true;
       try {
-        const res = await api(`${periodUrl}/${path}`, { method: "POST", body: {} });
+        const res = await api(`${periodUrl}/${path}`, { method: "POST", body });
         toast(res.message, "ok");
         todayView(view);
       } catch (err) {
@@ -181,7 +179,7 @@ export async function mount(root, { challengeId, challenge }) {
         leave,
       ];
     } else if (ci) {
-      // Checked in but not on the list: left it, or auto-join is off.
+      // Checked in but not on the list: left it, or chose not to join.
       const btn = h("button", { class: "primary" }, t("join"));
       btn.onclick = () => act(btn, "membership");
       status = [
@@ -191,16 +189,26 @@ export async function mount(root, { challengeId, challenge }) {
         btn,
       ];
     } else {
-      const btn = h("button", { class: "primary big" }, t("check_in"));
-      btn.onclick = () => act(btn, "checkin");
+      const mode = cur.settings.join_mode;
+      let buttons;
+      if (mode === "ask") {
+        const join = h("button", { class: "primary big" }, t("check_in_join"));
+        const only = h("button", { class: "big" }, t("check_in_only"));
+        join.onclick = () => act(join, "checkin", { join: true });
+        only.onclick = () => act(only, "checkin", { join: false });
+        buttons = h("div", { class: "row" }, join, only);
+      } else {
+        buttons = h("button", { class: "primary big" }, t("check_in"));
+        buttons.onclick = () => act(buttons, "checkin");
+      }
       const streakLine = cur.streak > 0 ? t("streak_continue", { n: cur.streak, next: cur.streak + 1 }) : t("streak_start");
       status = [
         h("p", { class: "streak" }, streakLine),
-        btn,
+        buttons,
         h(
           "p",
           { class: "muted small" },
-          t(cur.settings.auto_join ? "auto_join_on_hint" : "auto_join_off_hint"),
+          joinModeHint(mode),
           " ",
           h("a", { href: `#/c/${challengeId}/settings` }, t("change_setting")),
         ),
@@ -257,16 +265,15 @@ export async function mount(root, { challengeId, challenge }) {
 
   async function settingsView(view) {
     const { settings } = await api(`${base}/settings`);
-    const auto = h("input", { type: "checkbox", checked: settings.auto_join });
-    auto.onchange = async () => {
+    const joinChoice = joinModeField(settings.join_mode, async (mode) => {
       try {
-        await api(`${base}/settings`, { method: "PUT", body: { auto_join: auto.checked } });
-        toast(t(auto.checked ? "auto_on" : "auto_off"), "ok");
+        await api(`${base}/settings`, { method: "PUT", body: { join_mode: mode } });
+        toast(t("saved"), "ok");
       } catch (err) {
-        auto.checked = !auto.checked;
         toast(err.message, "error");
+        throw err;
       }
-    };
+    });
     const purge = h("button", { class: "danger" }, t("purge"));
     purge.onclick = async () => {
       if (!confirm(t("purge_confirm"))) return;
@@ -279,8 +286,8 @@ export async function mount(root, { challengeId, challenge }) {
         "section",
         { class: "panel" },
         h("h2", {}, t("participation")),
-        h("label", { class: "check" }, auto, t("auto_join")),
-        h("p", { class: "muted small" }, t("auto_join_note")),
+        joinChoice,
+        h("p", { class: "muted small" }, t("join_mode_note")),
       ),
       h(
         "section",
