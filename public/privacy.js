@@ -17,7 +17,7 @@ const CONTENT = {
         h: "我们存什么",
         p: [
           "账号：你用来登录的学校邮箱，以及注册和同意网站规则的时间。",
-          "资料：你在资料页填写的全部内容，包括昵称、性别、项目、头像、寻找的关系、筛选条件、对每种关系的期待、微信、Discord、研究兴趣和简介。",
+          "资料：你在资料页填写的全部内容，包括昵称、性别、项目、头像、寻找的关系（以及在每个挑战里寻找哪几种）、筛选条件、对每种关系的期待、微信、Discord、研究兴趣和简介。",
           "挑战记录：你哪天签到、哪天完成了 LeetCode 题目、是否在当天的名单上，以及对应的时间。参加 LeetCode 挑战时，还有你绑定的 LeetCode 用户名和验证记录。",
           "另外还有：登录会话、你上传的头像图片、头像上传次数，以及封禁记录。",
           "我们不存：任何密码（登录交给 Google）；你的 LeetCode 密码、cookie 或代码。本站没有站内消息、点赞、匹配，也不记录谁看过谁，所以这些信息都不存在。",
@@ -34,8 +34,9 @@ const CONTENT = {
       {
         h: "谁能看到什么",
         p: [
-          "其他成员：只有和你在同一期名单上、和你至少有一种共同寻找的关系、并且双方都满足对方筛选条件的人，才能看到你的卡片。卡片上总会有头像、昵称、性别、项目和学校邮箱；研究兴趣和简介填了就显示；微信和 Discord 只向你选择的关系显示；每段“期待”只向同样寻找那种关系的人显示。",
+          "其他成员：只有和你在同一期名单上、在这个挑战里和你至少有一种共同寻找的关系、并且双方都满足对方筛选条件的人，才能看到你的卡片。卡片上总会有头像、昵称、性别、项目和学校邮箱；研究兴趣和简介填了就显示；微信和 Discord 只向你选择的关系显示；每段“期待”只向同样寻找那种关系的人显示。",
           "筛选是双向的：能在某种关系下看到你的人，会知道你在这种关系上接受他们的性别和项目。对约会来说，这可能透露你的性取向。",
+          "首页会把你在各个挑战里能看到的人合并显示，不标明来源；但如果你只在一个挑战里寻找某种关系，在首页这种关系下看到你的人，能推断出你们是在那个挑战里遇到的。",
           "能看到你卡片的人可以截图或记下你的信息，我们无法阻止。",
           "网站运营者：本站没有任何查看资料的后台或接口，日志也不记录个人信息。但运营者控制网站的部署，可以修改并上线新代码，而新代码能读到解密后的数据。按规定，部署只通过公开仓库里的自动化流程进行，但目前还没有独立的第三方核对每一次上线是否都来自这个流程。运营者能看到上面说的元数据，也能封禁账号。",
           "Cloudflare：托管整个网站和数据库，会处理你的每个请求（包括 IP 地址），并按它自己的政策保存访问日志。Cloudflare 能接触运行中的系统，不在本站能保护的范围之内。",
@@ -84,7 +85,7 @@ const CONTENT = {
         h: "What we store",
         p: [
           "Your account: the school email you sign in with, and when you registered and accepted the site rules.",
-          "Your profile: everything you fill in on it, including nickname, gender, program, avatar, what you are looking for, your filters, what you hope for in each relationship, WeChat, Discord, research interests and bio.",
+          "Your profile: everything you fill in on it, including nickname, gender, program, avatar, what you are looking for (overall and in each challenge), your filters, what you hope for in each relationship, WeChat, Discord, research interests and bio.",
           "Challenge records: the days you checked in or completed the LeetCode problem, whether you were on that day's list, and the times. If you take part in LeetCode Daily, also the LeetCode username you bound and your verification records.",
           "Also: your sign-in sessions, the avatar images you upload, how many uploads you have made, and ban records.",
           "We do not store passwords (Google handles sign-in) or your LeetCode password, cookies or code. There are no messages, likes, matches or records of who viewed whom on this site, so none of that exists.",
@@ -101,8 +102,9 @@ const CONTENT = {
       {
         h: "Who can see what",
         p: [
-          "Other members: only people on the same period's list as you, who share at least one relationship type you are looking for, and who pass each other's filters, can see your card. It always shows your avatar, nickname, gender, program and school email; research interests and bio when you fill them in; WeChat and Discord only to the relationship types you choose; and each note on what you hope for only to people looking for that same type.",
+          "Other members: only people on the same period's list as you, who share at least one relationship type you are looking for in that challenge, and who pass each other's filters, can see your card. It always shows your avatar, nickname, gender, program and school email; research interests and bio when you fill them in; WeChat and Discord only to the relationship types you choose; and each note on what you hope for only to people looking for that same type.",
           "Filters work both ways: anyone who can see you under a relationship type learns that you accept their gender and program for it. For dating, this can reveal your sexual orientation.",
+          "The home page merges the people you can see in every challenge without saying where you met them. But if you look for a type in only one challenge, someone who sees you under that type on the home page can tell which challenge it was.",
           "People who can see your card can take screenshots or note down what it says; we cannot prevent that.",
           "The site operator: there is no admin page or endpoint that shows profiles, and logs never contain personal data. But the operator controls deployment and could put new code online, and new code could read decrypted data. Deployments are meant to happen only through the automated process in the public repository, but nobody independent checks yet that every deployment did. The operator can see the metadata described above and can ban accounts.",
           "Cloudflare hosts the whole site and its database, handles every request (including your IP address) and keeps access logs under its own policies. Cloudflare has access to the running system and is outside what this site can protect against.",

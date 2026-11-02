@@ -244,6 +244,51 @@ test("join this period's list automatically: always, ask or never, in both chall
   assert.equal((await call(env, "a", "GET", `${lc}/enrollment`)).data.enrollment.join_mode, "always");
 });
 
+test("per-challenge relations: friends through check-in, dating only through LeetCode", async () => {
+  const env = createEnv();
+  const lc = "/api/challenges/leetcode-daily";
+  const both = { gender: "FEMALE", relations: ["FRIENDSHIP", "ROMANCE"] };
+  await register(env, "a", both);
+  await register(env, "b", { ...both, gender: "MALE" });
+  const rel = (u, challenge, relations) =>
+    call(env, u, relations ? "PUT" : "GET", `/api/profile/relations/${challenge}`, relations ? { relations } : undefined);
+
+  // Not choosing means all of the profile's relations.
+  assert.deepEqual((await rel("a", "daily-checkin")).data, { ok: true, profile_relations: ["FRIENDSHIP", "ROMANCE"], chosen: null, relations: ["FRIENDSHIP", "ROMANCE"] });
+  assert.equal((await rel("a", "daily-checkin", ["FRIENDSHIP"])).status, 200);
+  assert.equal((await rel("a", "leetcode-daily", ["ROMANCE"])).status, 200);
+  // At least one relation, all from the profile; only enabled challenges.
+  assert.equal((await rel("a", "daily-checkin", [])).status, 400);
+  assert.equal((await rel("a", "daily-checkin", ["STUDY"])).status, 400);
+  assert.equal((await rel("a", "nope", ["FRIENDSHIP"])).status, 404);
+
+  for (const u of ["a", "b"]) {
+    await checkin(env, u);
+    await call(env, u, "POST", `${lc}/enrollment`, { accept_rules: true, join_mode: "always" });
+    await call(env, u, "POST", `${lc}/binding/start`, { username: `${u}_ac` });
+    await call(env, u, "POST", `${lc}/binding/verify`, {});
+    await call(env, u, "POST", `${lc}/periods/${today()}/verify`, {});
+  }
+  const common = (list) => list.members.map((m) => m.common_relations);
+  assert.deepEqual(common(await ciMembers(env, "b")), [["FRIENDSHIP"]]);
+  assert.deepEqual(common((await call(env, "b", "GET", `${lc}/periods/${today()}/members`)).data), [["ROMANCE"]]);
+  // The home page merges both challenges.
+  const home = (await call(env, "b", "GET", "/api/people")).data;
+  assert.deepEqual(home.sections.map((x) => [x.relation, x.total]), [["FRIENDSHIP", 1], ["ROMANCE", 1]]);
+  assert.deepEqual(home.sections[0].people[0].common_relations, ["FRIENDSHIP", "ROMANCE"]);
+
+  // Saving the profile keeps the choices; dropping the only chosen relation hides a in LeetCode.
+  const put = await call(env, "a", "PUT", "/api/profile", { ...profile({ relations: ["FRIENDSHIP"] }) });
+  assert.equal(put.status, 409); // the matching lock still applies to the profile itself
+  env.DB.sqlite.exec("UPDATE cache_versions SET version = version + 1 WHERE name = 'profiles'");
+  await editProfile(env, "a", (p) => (p.matching_changed_at -= 8 * 86400_000));
+  assert.equal((await call(env, "a", "PUT", "/api/profile", { ...profile({ relations: ["FRIENDSHIP"] }) })).status, 200);
+  assert.deepEqual((await rel("a", "leetcode-daily")).data.chosen, ["ROMANCE"]);
+  assert.deepEqual((await rel("a", "leetcode-daily")).data.relations, []);
+  assert.equal((await call(env, "b", "GET", `${lc}/periods/${today()}/members`)).data.total, 0);
+  assert.deepEqual(common(await ciMembers(env, "b")), [["FRIENDSHIP"]]);
+});
+
 test("home page returns a first page per relation and the rest through offset", async () => {
   const env = createEnv();
   await register(env, "viewer", { relations: ["FRIENDSHIP", "STUDY"] });

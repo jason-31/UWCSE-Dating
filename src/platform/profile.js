@@ -227,16 +227,26 @@ export function meetsFilters(seeker, target, r) {
   return Object.entries(filters).every(([field, values]) => values.includes(target[field]));
 }
 
-// Relations under which viewer and owner see each other: both seek it, and each meets the
-// other's filters for it.
-export function matchingRelations(viewer, owner) {
-  return intersect(viewer.relations, owner.relations).filter((r) => meetsFilters(viewer, owner, r) && meetsFilters(owner, viewer, r));
+// The relations a person seeks in a challenge: those of their profile that they also chose for
+// that challenge (profile.challenge_relations[challengeId]; no choice means all of them). With no
+// challenge, the profile's relations. The choice can only narrow the profile, never widen it.
+export function relationsIn(profile, challengeId = null) {
+  const chosen = challengeId === null ? undefined : profile.challenge_relations?.[challengeId];
+  return chosen ? intersect(profile.relations, chosen) : profile.relations;
 }
 
-// The card a viewer may see, or null when no relation matches both ways. Runs server-side;
-// nothing outside the returned object is sent to the browser.
-export function buildCard(viewer, owner) {
-  const common = matchingRelations(viewer, owner);
+// Relations under which viewer and owner see each other (in a challenge, if given): both seek
+// it there, and each meets the other's filters for it.
+export function matchingRelations(viewer, owner, challengeId = null) {
+  return intersect(relationsIn(viewer, challengeId), relationsIn(owner, challengeId)).filter(
+    (r) => meetsFilters(viewer, owner, r) && meetsFilters(owner, viewer, r),
+  );
+}
+
+// The card a viewer may see under the common relations given (by default, those of their
+// profiles), or null when there are none. Runs server-side; nothing outside the returned object
+// is sent to the browser.
+export function buildCard(viewer, owner, common = matchingRelations(viewer, owner)) {
   if (!common.length) return null;
   const fields = {};
   for (const field of Object.keys(VISIBILITY_RULES)) {
@@ -314,11 +324,37 @@ export async function upsertProfileStatement(env, userId, email, p, current, cfg
     const same = current && lock.fields.every((f) => JSON.stringify(current[f]) === JSON.stringify(p[f]));
     timers[lock.column] = same ? current[lock.column] : now;
   }
-  const data = { ...p, email, schema_version: cfg.schema_version, ...timers, updated_at: now };
+  // Per-challenge choices are kept; they are changed through challengeRelationsStatement.
+  const data = { ...p, email, challenge_relations: current?.challenge_relations ?? {}, schema_version: cfg.schema_version, ...timers, updated_at: now };
   return env.DB.prepare(
     `INSERT INTO profiles (user_id, data, avatar_upload) VALUES (?, ?, ?)
      ON CONFLICT (user_id) DO UPDATE SET data = excluded.data, avatar_upload = excluded.avatar_upload`,
   ).bind(userId, await vault(env).seal(profileContext(userId), data), uploadId(p.avatar));
+}
+
+// The statement storing which of their profile's relations a person seeks in one challenge.
+// relations must already be validated (challengeRelationsFrom). No change lock: the choice only
+// narrows relations and filters that are themselves locked, so changing it cannot show anyone a
+// person they could not already see.
+export async function challengeRelationsStatement(env, current, challengeId, relations) {
+  const data = { ...current, challenge_relations: { ...current.challenge_relations, [challengeId]: relations } };
+  delete data.user_id;
+  return env.DB.prepare("UPDATE profiles SET data = ? WHERE user_id = ?").bind(
+    await vault(env).seal(profileContext(current.user_id), data),
+    current.user_id,
+  );
+}
+
+// Validates a per-challenge choice: one or more of the profile's relations, in configured order.
+export function challengeRelationsFrom(value, profile, cfg) {
+  if (!Array.isArray(value) || !value.length || value.some((r) => !profile.relations.includes(r))) {
+    throw new HttpError(
+      400,
+      "invalid_request",
+      L("请在个人资料里寻找的关系中至少选择一种", "Choose at least one of the relationship types in your profile"),
+    );
+  }
+  return cfg.relation_options.filter((r) => value.includes(r));
 }
 
 // Every profile row (still sealed) with its ban flag, from the versioned cache (see cache.js).
@@ -378,24 +414,43 @@ export function profileService(env, cfg) {
       const missing = missingRequired(await get(userId), cfg);
       return { complete: missing.length === 0, missing_fields: missing };
     },
-    // The relations a user seeks, in configured order.
-    async relations(userId) {
-      return (await get(userId))?.relations ?? [];
+    // The relations a user seeks, in configured order: in a challenge, if given (relationsIn).
+    async relations(userId, challengeId = null) {
+      const profile = await get(userId);
+      return profile ? relationsIn(profile, challengeId) : [];
     },
-    // Map ownerId -> card (or null) as seen by viewerId, built from the current profiles. Banned
-    // and unknown owners are left out of the map, so they disappear from every list.
-    async cards(viewerId, ownerIds) {
-      const out = new Map();
-      const viewer = await get(viewerId);
-      if (!viewer) return out;
-      const profiles = await all();
+    // Map ownerId -> card (or null) as seen by viewerId in a challenge (or by profiles alone),
+    // built from the current profiles. Banned and unknown owners are left out of the map, so they
+    // disappear from every list.
+    cards: (viewerId, ownerIds, challengeId = null) => cardsAcross(viewerId, new Map([[challengeId, ownerIds]])),
+    cardsAcross,
+  };
+
+  // Like cards, for people met in several challenges at once (the home page): a card's common
+  // relations are those matching in any challenge the two share a list in, in configured order.
+  // idsByChallenge: Map challengeId -> owner ids.
+  async function cardsAcross(viewerId, idsByChallenge) {
+    const out = new Map();
+    const viewer = await get(viewerId);
+    if (!viewer) return out;
+    const profiles = await all();
+    const common = new Map(); // ownerId -> { owner, relations: Set }
+    for (const [challengeId, ownerIds] of idsByChallenge) {
       for (const id of ownerIds) {
         const row = profiles.get(id);
         if (!row || row.banned) continue;
         const owner = await openCached(env, id, row.data);
-        if (owner) out.set(id, missingRequired(owner, cfg).length ? null : buildCard(viewer, owner));
+        if (!owner) continue;
+        const entry = common.get(id) ?? { owner, relations: new Set() };
+        common.set(id, entry);
+        if (missingRequired(owner, cfg).length) continue;
+        for (const r of matchingRelations(viewer, owner, challengeId)) entry.relations.add(r);
       }
-      return out;
-    },
-  };
+    }
+    for (const [id, { owner, relations }] of common) {
+      const card = missingRequired(owner, cfg).length ? null : buildCard(viewer, owner, cfg.relation_options.filter((r) => relations.has(r)));
+      out.set(id, card);
+    }
+    return out;
+  }
 }

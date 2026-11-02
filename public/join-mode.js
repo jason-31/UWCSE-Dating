@@ -54,7 +54,7 @@ export function joinModeField(value, onChange) {
   });
   return h(
     "div",
-    { class: "field join-mode" },
+    { class: "field choice-field" },
     h("label", {}, t("label")),
     h(
       "div",

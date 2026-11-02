@@ -1,6 +1,7 @@
 import { h, fill, api, fmtTime, toast, ApiError } from "/lib.js";
 import { makeT } from "/i18n.js";
 import { joinModeField, joinModeHint } from "/join-mode.js";
+import { challengeRelationsSlot } from "/challenge-relations.js";
 import { personCard } from "/card.js";
 
 const t = makeT({
@@ -19,9 +20,6 @@ const t = makeT({
     checked_in_only: "✓ 你在 {time} 签到了。",
     not_on_list: "你目前不在本期名单中，看不到其他成员，别人也看不到你。",
     join: "加入本期名单",
-    profile: "个人资料",
-    profile_hint: "昵称、头像、寻找的关系和联系方式是全站通用的个人资料。",
-    edit_profile: "编辑个人资料 →",
     data: "数据",
     need_profile: "请先补齐个人资料",
     need_profile_body: "个人资料全站通用，补齐后再回来签到。",
@@ -71,9 +69,6 @@ const t = makeT({
     checked_in_only: "✓ You checked in at {time}.",
     not_on_list: "You're not on this period's list, so you can't see the others and they can't see you.",
     join: "Join this period's list",
-    profile: "Profile",
-    profile_hint: "Nickname, avatar, what you're looking for and contact details are part of your site-wide profile.",
-    edit_profile: "Edit profile →",
     data: "Data",
     need_profile: "Complete your profile first",
     need_profile_body: "Your profile is shared across the site. Come back to check in once it's complete.",
@@ -204,6 +199,7 @@ export async function mount(root, { challengeId, challenge }) {
       const streakLine = cur.streak > 0 ? t("streak_continue", { n: cur.streak, next: cur.streak + 1 }) : t("streak_start");
       status = [
         h("p", { class: "streak" }, streakLine),
+        challengeRelationsSlot(challengeId),
         buttons,
         h(
           "p",
@@ -286,15 +282,9 @@ export async function mount(root, { challengeId, challenge }) {
         "section",
         { class: "panel" },
         h("h2", {}, t("participation")),
+        challengeRelationsSlot(challengeId),
         joinChoice,
         h("p", { class: "muted small" }, t("join_mode_note")),
-      ),
-      h(
-        "section",
-        { class: "panel" },
-        h("h2", {}, t("profile")),
-        h("p", { class: "muted small" }, t("profile_hint")),
-        h("a", { href: "#/profile" }, t("edit_profile")),
       ),
       h("section", { class: "panel" }, h("h2", {}, t("data")), purge),
     );
