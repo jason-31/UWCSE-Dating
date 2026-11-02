@@ -12,10 +12,11 @@ import { vault, emailHash } from "./vault.js";
 export const AVATAR_SIZE_PX = 256;
 export const AVATAR_MAX_BYTES = 512_000;
 
-// Upload attempts per verified email in any rolling AVATAR_UPLOAD_WINDOW_DAYS. Every request that
-// gets past the basic-info lock counts, whether or not the image is accepted, and the count is
-// kept apart from the images: deleting an upload, deleting the account or signing in again does
-// not restore attempts. Presets stay available at any time.
+// Upload attempts per verified email in any rolling AVATAR_UPLOAD_WINDOW_DAYS. Every upload request
+// counts, whether or not the image is accepted, and the count is kept apart from the images:
+// deleting an upload, deleting the account or signing in again does not restore attempts.
+// Choosing an avatar is not limited: presets, the upload in use and the latest upload (kept even
+// while unused) can be switched between at any time.
 export const AVATAR_UPLOAD_ATTEMPTS = 5;
 export const AVATAR_UPLOAD_WINDOW_DAYS = 30;
 const UPLOAD_WINDOW_MS = AVATAR_UPLOAD_WINDOW_DAYS * 86400_000;
@@ -109,28 +110,41 @@ async function inUse(db, owner) {
   return row?.avatar_upload ?? null;
 }
 
-// Deletes this email's uploads except the one its profile uses and any listed in keep. (Upload
-// limits are counted in avatar_upload_attempts, so deleting rows here restores nothing.)
+// This email's latest upload, which is kept even while the profile uses something else, so that
+// switching back to it costs no upload. Null if there is none.
+export async function latestUpload(env, email) {
+  const row = await env.DB.prepare("SELECT id FROM avatars WHERE owner_hash = ? ORDER BY created_at DESC, rowid DESC LIMIT 1")
+    .bind(await emailHash(env, email))
+    .first();
+  return row ? { avatar: `upload:${row.id}`, url: avatarUrl(`upload:${row.id}`) } : null;
+}
+
+// Deletes this email's uploads except the one its profile uses, the latest one, and any listed in
+// keep. (Upload limits are counted in avatar_upload_attempts, so deleting rows restores nothing.)
 export async function pruneAvatars(env, email, { keep = [] } = {}) {
   const owner = await emailHash(env, email);
   const current = await inUse(env.DB, owner);
-  const rows = await env.DB.prepare("SELECT id FROM avatars WHERE owner_hash = ?").bind(owner).all();
-  const stale = rows.results.map((r) => r.id).filter((id) => id !== current && !keep.includes(id));
+  const rows = await env.DB.prepare("SELECT id FROM avatars WHERE owner_hash = ? ORDER BY created_at DESC, rowid DESC").bind(owner).all();
+  const latest = rows.results[0]?.id;
+  const stale = rows.results.map((r) => r.id).filter((id) => id !== current && id !== latest && !keep.includes(id));
   if (!stale.length) return;
   await env.BUCKET.delete(stale.map((id) => `avatars/${id}`));
   await env.DB.batch(stale.map((id) => env.DB.prepare("DELETE FROM avatars WHERE id = ?").bind(id)));
 }
 
 // An upload no profile uses is kept this long, so whoever is registering or editing their
-// profile with it can still save it. After that the daily clean-up deletes it: uploads by people
-// who never finished registering, any that a failed prune left behind, and images in R2 that no
+// profile with it can still save it. After that the daily clean-up deletes it, except a
+// registered person's latest upload (kept so they can switch back to it): uploads by people who
+// never finished registering, older uploads a failed prune left behind, and images in R2 that no
 // row refers to at all.
 export const UNUSED_UPLOAD_TTL_MS = 86400_000;
 
 export async function pruneUnusedUploads(env, now) {
   const cutoff = now - UNUSED_UPLOAD_TTL_MS;
   const rows = await env.DB.prepare(
-    "SELECT id FROM avatars WHERE created_at < ? EXCEPT SELECT avatar_upload FROM profiles WHERE avatar_upload IS NOT NULL",
+    `SELECT id FROM avatars WHERE created_at < ?
+     EXCEPT SELECT avatar_upload FROM profiles WHERE avatar_upload IS NOT NULL
+     EXCEPT SELECT (SELECT b.id FROM avatars b WHERE b.owner_hash = u.email_hash ORDER BY b.created_at DESC, b.rowid DESC LIMIT 1) FROM users u`,
   )
     .bind(cutoff)
     .all();
@@ -191,28 +205,14 @@ async function takeUploadAttempt(env, email, now) {
     429,
     "upload_limit",
     L(
-      `每 ${AVATAR_UPLOAD_WINDOW_DAYS} 天最多上传 ${AVATAR_UPLOAD_ATTEMPTS} 次头像，上传失败也算一次。下次可以上传的时间是 ${pacificTime(next, "zh-CN")}（太平洋时间）；在此之前仍可选择预设头像。`,
-      `Avatars can be uploaded at most ${AVATAR_UPLOAD_ATTEMPTS} times every ${AVATAR_UPLOAD_WINDOW_DAYS} days, failed uploads included. You can upload again after ${pacificTime(next, "en-US")} (Pacific time); until then you can still pick a preset avatar.`,
+      `每 ${AVATAR_UPLOAD_WINDOW_DAYS} 天最多上传 ${AVATAR_UPLOAD_ATTEMPTS} 次头像，上传失败也算一次。下次可以上传的时间是 ${pacificTime(next, "zh-CN")}（太平洋时间）；在此之前仍可随时换成预设头像或你最近上传的头像。`,
+      `Avatars can be uploaded at most ${AVATAR_UPLOAD_ATTEMPTS} times every ${AVATAR_UPLOAD_WINDOW_DAYS} days, failed uploads included. You can upload again after ${pacificTime(next, "en-US")} (Pacific time); until then you can still switch to a preset or your latest upload.`,
     ),
     { next_upload_at: next },
   );
 }
 
-// basicLockedUntil: when the uploader's basic-info lock ends (0 if not registered). The avatar is
-// basic info, so an upload made during the lock could never be saved; it is refused before it
-// costs an attempt.
-export async function uploadAvatar(env, request, email, now, { basicLockedUntil = 0 } = {}) {
-  if (now < basicLockedUntil) {
-    throw new HttpError(
-      409,
-      "basic_locked",
-      L(
-        `头像属于基本信息，${pacificTime(basicLockedUntil, "zh-CN")}（太平洋时间）之后才能更换，在此之前不能上传。`,
-        `Your avatar is basic info and can't be changed until ${pacificTime(basicLockedUntil, "en-US")} (Pacific time), so uploads are not available until then.`,
-      ),
-      { basic_locked_until: basicLockedUntil },
-    );
-  }
+export async function uploadAvatar(env, request, email, now) {
   await takeUploadAttempt(env, email, now); // from here on, a failure still uses the attempt
   const bytes = await readBody(request, AVATAR_MAX_BYTES, tooLarge);
   if (!bytes.length) throw new HttpError(400, "invalid_request", L("没有收到图片", "No image received"));

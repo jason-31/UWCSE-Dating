@@ -23,7 +23,7 @@ import { assertMayRegister, tombstoneStatements } from "./platform/deletions.js"
 import { pruneExpired } from "./platform/retention.js";
 import { isBanned, applyBanRequests } from "./platform/bans.js";
 import { vault, emailHash } from "./platform/vault.js";
-import { uploadAvatar, serveAvatar, assertAvatarOwned, pruneAvatars, deleteAllAvatars, avatarUrl } from "./platform/avatars.js";
+import { uploadAvatar, serveAvatar, assertAvatarOwned, pruneAvatars, deleteAllAvatars, avatarUrl, latestUpload } from "./platform/avatars.js";
 import { SITE } from "./site.config.js";
 import { CHALLENGES } from "./challenges.config.js";
 import leetcode from "./modules/leetcode/index.js";
@@ -239,9 +239,7 @@ async function handleApi(request, env, url, lang) {
     if (!emailAllowed(email, profileCfg.allowed_email_domains)) {
       throw new HttpError(403, "email_not_allowed", L("该邮箱不能上传头像", "This email cannot upload avatars"));
     }
-    // The avatar is basic info: while its 30-day change lock runs, an upload could never be saved.
-    const basicLockedUntil = userId ? lockedUntil(await getProfile(env, userId), profileCfg).basic : 0;
-    return json({ ok: true, ...(await uploadAvatar(env, request, email, now, { basicLockedUntil })) });
+    return json({ ok: true, ...(await uploadAvatar(env, request, email, now)) });
   }
 
   // Registration creates the identity and the site-wide profile together. The email is the
@@ -307,6 +305,7 @@ async function handleApi(request, env, url, lang) {
       profile: publicProfile(p),
       missing_fields: missingRequired(p, profileCfg),
       locked_until: lockedUntil(p, profileCfg),
+      latest_upload: await latestUpload(env, email), // offered in the avatar picker even when unused
     });
   }
 

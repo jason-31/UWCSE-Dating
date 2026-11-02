@@ -432,6 +432,12 @@ test("daily clean-up deletes only rows no request needs any more", async () => {
   const stale = await upload(env, "stale"); // never registered, two days ago: deleted
   const used = await upload(env, "user"); // two days ago, but the profile uses it: kept
   await register(env, "user", { avatar: used.data.avatar });
+  const older = await upload(env, "keeper"); // registered, unused and not the latest: deleted
+  await register(env, "keeper", { avatar: "male" });
+  env.DB.sqlite.prepare("UPDATE avatars SET created_at = ? WHERE id = ?").run(now - 3 * day, older.data.avatar.slice(7));
+  const latest = await upload(env, "keeper"); // registered, unused but the latest: kept
+  env.DB.sqlite.prepare("INSERT INTO avatars (id, owner_hash, content_type, size, created_at) SELECT ?, owner_hash, content_type, size, ? FROM avatars WHERE id = ?").run("f".repeat(32), now - 3 * day, latest.data.avatar.slice(7)); // an older leftover row
+  env.DB.sqlite.prepare("UPDATE avatars SET created_at = ? WHERE id = ?").run(now - 2 * day, latest.data.avatar.slice(7));
   const period = (pid) => `('leetcode-daily', '${pid}', 0, 1, 'America/Los_Angeles', '{}', 'pool-v1', 1, 1, 0)`;
   env.DB.sqlite.exec(`
     UPDATE avatars SET created_at = ${now - 2 * day} WHERE id IN ('${id(stale)}', '${id(used)}');
@@ -455,8 +461,8 @@ test("daily clean-up deletes only rows no request needs any more", async () => {
 
   await worker.scheduled({ cron: "17 11 * * *" }, env);
   const col = (sql) => env.DB.sqlite.prepare(sql).all().map((r) => Object.values(r)[0]);
-  assert.deepEqual(col("SELECT id FROM avatars ORDER BY id"), [id(fresh), id(used)].sort());
-  assert.deepEqual([...env.BUCKET.objects.keys()].sort(), [`avatars/${id(fresh)}`, `avatars/${id(used)}`, "avatars/orphan-new"].sort());
+  assert.deepEqual(col("SELECT id FROM avatars ORDER BY id"), [id(fresh), id(used), id(latest)].sort());
+  assert.deepEqual([...env.BUCKET.objects.keys()].sort(), [`avatars/${id(fresh)}`, `avatars/${id(used)}`, `avatars/${id(latest)}`, "avatars/orphan-new"].sort());
   assert.equal((await env.BUCKET.get(`avatars/${id(stale)}`)), null);
   assert.ok(await env.BUCKET.get(`avatars/${id(used)}`));
   assert.deepEqual(col("SELECT token_hash FROM sessions"), ["live"]);
@@ -638,24 +644,27 @@ test("avatar uploads: concurrent requests cannot exceed the limit", async () => 
   assert.equal(results.filter((r) => r.status === 429).length, 4);
 });
 
-test("avatar uploads: refused during the basic-info lock, and deleting the account restores nothing", async () => {
+test("avatars: switching is free and unlocked; the latest upload is kept; deleting restores no attempts", async () => {
   const env = createEnv();
-  await register(env, "w"); // registering starts the 30-day basic-info lock
-  const locked = await upload(env, "w");
-  assert.equal(locked.status, 409);
-  assert.equal(locked.data.code, "basic_locked");
-  assert.equal(attempts(env).length, 0); // costs no attempt
-
-  await editProfile(env, "w", (p) => (p.basic_changed_at -= 31 * 86400_000));
+  await register(env, "w"); // starts the 30-day lock on nickname, gender and program
   const up = await upload(env, "w");
-  assert.equal(up.status, 200);
-  // Uploading alone does not start the lock; saving the new avatar does.
-  assert.equal((await upload(env, "w")).status, 200);
-  const save = await call(env, "w", "PUT", "/api/profile", { ...profile(), avatar: up.data.avatar });
-  assert.equal(save.status, 400); // the upload replaced by the second one was pruned
-  const latest = env.DB.sqlite.prepare("SELECT id FROM avatars").get().id;
-  assert.equal((await call(env, "w", "PUT", "/api/profile", { ...profile(), avatar: `upload:${latest}` })).status, 200);
-  assert.equal((await upload(env, "w")).data.code, "basic_locked");
+  assert.equal(up.status, 200); // uploading is not blocked by that lock
+  const save = (avatar) => call(env, "w", "PUT", "/api/profile", { ...profile(), avatar });
+  assert.equal((await save(up.data.avatar)).status, 200);
+  // Back and forth between a preset and the photo, without uploading again.
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await save("female")).status, 200);
+    assert.equal((await save(up.data.avatar)).status, 200);
+  }
+  assert.equal(attempts(env).length, 1);
+  assert.equal((await save("male")).status, 200);
+  assert.deepEqual((await call(env, "w", "GET", "/api/profile")).data.latest_upload, { avatar: up.data.avatar, url: `/api/avatars/${up.data.avatar.slice(7)}` });
+  // A new upload replaces the unused one; the profile can still use the new one.
+  const second = await upload(env, "w");
+  assert.equal((await save(up.data.avatar)).status, 400); // the first was pruned
+  assert.equal((await save(second.data.avatar)).status, 200);
+  // The lock still covers the nickname.
+  assert.equal((await call(env, "w", "PUT", "/api/profile", { ...profile({ nickname: "other" }), avatar: second.data.avatar })).data.code, "basic_locked");
 
   assert.equal((await call(env, "w", "DELETE", "/api/account")).status, 200);
   assert.equal(attempts(env).length, 2); // the count survives account deletion

@@ -173,6 +173,7 @@ async function renderProfile() {
       profile: data.profile,
       email: me.email,
       lockedUntil: data.locked_until,
+      latestUpload: data.latest_upload,
       title: t("my_profile"),
       intro: t("profile_intro"),
       submitLabel: t("save_profile"),

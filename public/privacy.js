@@ -49,7 +49,7 @@ const CONTENT = {
         h: "保存多久",
         p: [
           "资料、签到和挑战记录：保存到你修改或注销为止。",
-          "登录会话：30 天后过期并删除。没被资料用上的头像上传：1 天后删除。LeetCode 验证记录：7 天后删除，绑定令牌过期后删除。头像上传次数：30 天后删除。",
+          "登录会话：30 天后过期并删除。没被资料用上的头像上传：1 天后删除，但你最近一次上传的头像会一直保留，方便你随时换回，注销账号时删除。LeetCode 验证记录：7 天后删除，绑定令牌过期后删除。头像上传次数：30 天后删除。",
           "注销账号时，你的数据会立即删除，只留下一条由邮箱算出的哈希，保留到你原来资料的修改间隔结束（最多 30 天）；在此之前，这个邮箱不能重新注册。",
           "封禁记录（邮箱哈希和加密的原因）永久保存，注销账号也不会解除封禁。",
           "数据库服务（Cloudflare D1）会保留最近 7 天的历史版本用于恢复，所以删除的数据可能在其中再存在最多 7 天，同样是加密的。",
@@ -117,7 +117,7 @@ const CONTENT = {
         h: "How long we keep it",
         p: [
           "Your profile, check-ins and challenge records: until you change them or delete your account.",
-          "Sign-in sessions expire and are deleted after 30 days. Uploaded avatars your profile does not use: deleted after a day. LeetCode verification records: deleted after 7 days; binding tokens once they expire. Upload counts: deleted after 30 days.",
+          "Sign-in sessions expire and are deleted after 30 days. Uploaded avatars your profile does not use: deleted after a day, except your latest upload, which is kept so you can switch back to it and deleted with your account. LeetCode verification records: deleted after 7 days; binding tokens once they expire. Upload counts: deleted after 30 days.",
           "When you delete your account, your data is deleted at once. Only a hash computed from your email remains, until the change limits on your old profile would have ended (at most 30 days); until then that email cannot register again.",
           "Ban records (an email hash and an encrypted reason) are kept permanently; deleting the account does not lift a ban.",
           "The database service (Cloudflare D1) keeps 7 days of history for recovery, so deleted data may remain there, still encrypted, for up to 7 more days.",

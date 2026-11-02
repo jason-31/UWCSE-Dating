@@ -12,7 +12,7 @@ export const SITE = {
     // Relations sought and per-relation filters share one lock: after changing either, a user
     // must wait this long before changing either again.
     matching_change_cooldown_days: 7,
-    // Basic info (nickname, gender, program, avatar) shares one lock as well.
+    // Nickname, gender and program share one lock as well (the avatar can change any time).
     basic_change_cooldown_days: 30,
     // Deployment-specific; overridable with the ALLOWED_EMAIL_DOMAINS env var.
     allowed_email_domains: ["cs.washington.edu"],
