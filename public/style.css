@@ -124,6 +124,7 @@ a.button.primary:hover { filter: brightness(1.12); }
 
 .about { max-width: 720px; margin: 8px auto 16px; }
 .about .lead { font-size: 17px; }
+.about .unofficial { padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--field); font-weight: 600; }
 .about section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
 .about h2 { font-size: 18px; }
 

@@ -2,7 +2,7 @@
 
 What UWCSE.date does and must keep doing. The module guide ([challenge.md](challenge.md)) covers how a challenge is built; the oversight rules ([oversight.md](oversight.md)) cover who can see what behind the scenes. Where this document and the code disagree, one of them has a bug.
 
-The site lets people who completed the same task on the same day, and who want the same kind of relationship, find each other and reach out through contact details they chose to share. It does not host conversations.
+UWCSE.date is an unofficial site run independently by an individual; it is not a service of the Paul G. Allen School or the University of Washington, and the About page says so first. The site lets people who completed the same task on the same day, and who want the same kind of relationship, find each other and reach out through contact details they chose to share. It does not host conversations.
 
 ## Accounts
 
@@ -65,7 +65,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 - Checks are user-triggered, with a 60-second cooldown per person and a per-minute cap for the challenge. A check accepted before the period ends may finish up to 60 seconds after, for the old period only.
 - Verifying proves that an Accepted submission exists on that account. It does not prove the person solved the problem alone.
 - Leaving today's list is possible at any time; checking again does not put someone back, rejoining is a separate, explicit action.
-- **Data source**: LeetCode offers no official API, and its terms restrict automated access. Until there is written permission, verification can be paused (`verification.paused`) or the challenge disabled; lists and history keep working while paused.
+- **Data source**: LeetCode's GraphQL endpoint. Verification can be paused (`verification.paused`) without affecting lists and history.
 - Badges and a look-back at yesterday's list are implemented but switched off.
 
 ### Daily Check-in
@@ -77,7 +77,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 ## Moderation
 
 - Bans are made from the command line (`scripts/ban.mjs`) and applied by the Worker within five minutes. There is no admin UI, and no list of banned emails can be read back.
-- Still to come: a published contact address and a per-viewer block list.
+- Contact for questions, reports and data requests: chines_cells_9s@icloud.com (in the privacy notice). Still to come: a per-viewer block list.
 
 ## Data kept and for how long
 

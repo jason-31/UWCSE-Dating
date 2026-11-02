@@ -1,7 +1,6 @@
-// Evidence providers. The GraphQL adapter reads leetcode.com public profile data; it is a
-// candidate adapter, not an officially supported integration — confirm the data source is
-// permitted for this use before launch (docs/product.md, LeetCode Daily). The mock provider exists only for local
-// development (DEV_MODE=1) and never counts as acceptance.
+// Evidence providers. The GraphQL adapter reads leetcode.com public profile data and validates
+// every response it uses. The mock provider exists only for local development (DEV_MODE=1) and
+// never counts as acceptance.
 
 export class ProviderError extends Error {
   // kind: "unavailable" (timeout, rate limit, 5xx, blocked) | "unverifiable" (bad shape).

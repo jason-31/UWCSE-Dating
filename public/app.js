@@ -2,6 +2,7 @@ import { h, fill, api, devUser, setDevUser, toast } from "/lib.js";
 import { openCard } from "/card.js";
 import { profileForm } from "/profile.js";
 import { aboutPage } from "/about.js";
+import { privacyPage } from "/privacy.js";
 import { t, lang, setLang, RELATIONS } from "/i18n.js";
 
 const app = document.getElementById("app");
@@ -70,6 +71,8 @@ function renderHeader() {
   fill(
     document.getElementById("whoami"),
     me.signed_in && h("a", { href: "#/about" }, t("about")),
+    // The privacy notice is readable before signing in.
+    h("a", { href: "#/privacy" }, t("privacy")),
     me.registered && !me.banned ? h("a", { href: "#/profile" }, t("my_profile")) : "",
     me.signed_in && h("span", { class: "muted" }, me.email),
     me.signed_in && me.auth === "google" && signOut,
@@ -125,6 +128,8 @@ async function renderRegister() {
     { class: "terms" },
     h("h3", {}, t("site_rules")),
     h("ul", { class: "rules" }, h("li", {}, t("rule1")), h("li", {}, t("rule2")), h("li", {}, t("rule3"))),
+    // Opens in a new tab so the form being filled in is kept.
+    h("p", { class: "muted small" }, t("privacy_pre"), h("a", { href: "/#/privacy", target: "_blank", rel: "noopener" }, t("privacy_link")), t("privacy_post")),
     h("label", { class: "check" }, accept, t("accept_rules")),
   );
   app.replaceChildren(
@@ -282,6 +287,7 @@ async function route() {
 
 async function renderRoute() {
   if (!me) return;
+  if (location.hash === "#/privacy") return app.replaceChildren(privacyPage());
   if (!me.signed_in) return renderSignedOut();
   if (me.banned) return renderBanned();
   // Unregistered visitors read the About page first, then register from there.

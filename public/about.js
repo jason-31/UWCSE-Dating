@@ -5,6 +5,8 @@ import { lang } from "/i18n.js";
 const CONTENT = {
   zh: {
     title: "关于 UWCSE.date",
+    unofficial:
+      "本站是个人独立运营的非官方网站，不是 Paul G. Allen School 或华盛顿大学的官方服务，不受它们管理，也没有得到它们的认可或支持。用学校账号登录只是为了确认你是 CSE 的成员。",
     lead: "这里不是刷卡片的交友软件。UW CSE 的同学通过一起完成可验证的学术挑战认识彼此：在同一个挑战的同一期完成任务的人，才会出现在彼此的名单里。",
     sections: [
       {
@@ -63,6 +65,8 @@ const CONTENT = {
   },
   en: {
     title: "About UWCSE.date",
+    unofficial:
+      "This is an unofficial site run independently by an individual. It is not a service of the Paul G. Allen School or the University of Washington, is not managed by them, and is not endorsed or supported by them. Signing in with your school account only confirms that you are part of CSE.",
     lead: "This isn't a swipe app. People in UW CSE meet by finishing verifiable academic challenges together: you only appear on someone's list if you both completed the same period of the same challenge.",
     sections: [
       {
@@ -134,6 +138,7 @@ export function aboutPage({ registered, signedIn = true, notice = null }) {
     { class: "panel about" },
     h("h1", {}, c.title),
     notice,
+    h("p", { class: "unofficial" }, c.unofficial),
     h("p", { class: "lead" }, c.lead),
     !signedIn && h("div", { class: "row" }, action()),
     c.sections.map((s) => h("section", {}, h("h2", {}, s.h), s.p.map((p) => h("p", {}, p)))),
