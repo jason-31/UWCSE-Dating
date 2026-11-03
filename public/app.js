@@ -76,6 +76,8 @@ function renderHeader() {
     me.registered && !me.banned ? h("a", { href: "#/profile" }, t("my_profile")) : "",
     me.signed_in && h("span", { class: "muted" }, me.email),
     me.signed_in && me.auth === "google" && signOut,
+    // Where people look for it first; the page below has the main button too.
+    !me.signed_in && me.auth === "google" && h("a", { class: "header-sign-in", href: "/auth/login" }, t("sign_in")),
   );
   renderLangSwitch();
 }

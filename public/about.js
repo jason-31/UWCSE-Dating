@@ -61,7 +61,8 @@ const CONTENT = {
       },
     ],
     register: "开始注册",
-    sign_in: "用 @cs.washington.edu Google 账号登录",
+    sign_in: "用 Google 账号登录",
+    sign_in_note: "仅限 @cs.washington.edu 学校账号。",
     back: "返回首页",
   },
   en: {
@@ -120,7 +121,8 @@ const CONTENT = {
       },
     ],
     register: "Register",
-    sign_in: "Sign in with your @cs.washington.edu Google account",
+    sign_in: "Sign in with Google",
+    sign_in_note: "Only @cs.washington.edu school accounts.",
     back: "Back to home",
   },
 }[lang];
@@ -131,7 +133,17 @@ export function aboutPage({ registered, signedIn = true, notice = null }) {
   const c = CONTENT;
   const action = () =>
     !signedIn
-      ? h("a", { class: "button primary", href: "/auth/login" }, c.sign_in)
+      ? h(
+          "div",
+          { class: "sign-in" },
+          h(
+            "a",
+            { class: "button primary big", href: "/auth/login" },
+            h("span", { class: "g-badge" }, h("img", { src: "/google-g.svg", alt: "" })),
+            c.sign_in,
+          ),
+          h("p", { class: "muted small" }, c.sign_in_note),
+        )
       : registered
         ? h("a", { href: "#/" }, c.back)
         : h("a", { class: "button primary", href: "#/register" }, c.register);
