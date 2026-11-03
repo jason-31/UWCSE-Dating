@@ -179,8 +179,8 @@ export async function mount(root, { challengeId, challenge }) {
     const tabs = [
       ["today", t("tab_today")],
       ["members", t("tab_members")],
-      ["settings", t("tab_settings")],
       ["history", t("tab_history")],
+      ["settings", t("tab_settings")],
     ];
     const nav = h(
       "nav",
@@ -189,7 +189,7 @@ export async function mount(root, { challengeId, challenge }) {
     );
     const view = h("div", {}, h("p", { class: "muted" }, t("loading")));
     body.replaceChildren(nav, view);
-    const views = { today: todayView, members: membersView, settings: settingsView, history: historyView };
+    const views = { today: todayView, members: membersView, history: historyView, settings: settingsView };
     (views[tab] || todayView)(view).catch((err) => view.replaceChildren(errorBox(err)));
   }
 
