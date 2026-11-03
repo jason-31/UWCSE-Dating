@@ -31,12 +31,6 @@ export const CHALLENGES = [
       page_size: 20,
     },
 
-    history: {
-      enabled: false,
-      latest_periods_only: 1,
-      grace_hours_when_enabled: 24,
-    },
-
     badges: {
       enabled: false,
       milestones: [5, 20],

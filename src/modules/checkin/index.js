@@ -6,7 +6,8 @@ import { joinModeFrom } from "../../platform/join-mode.js";
 // verify. Whether checking in also puts you on that period's list is a per-user setting
 // (join_mode, src/platform/join-mode.js; "always" by default, shown before you check in): with
 // "ask" the check-in itself carries the answer, with "never" you can still join by hand.
-// Lists are per period and close when the period ends.
+// Lists are per period and close when the period ends. Check-ins (ci_checkins) are the user's
+// history and streak; who is on a list (ci_lists) is kept only while that list is open.
 
 const MODULE_VERSION = 1;
 
@@ -100,7 +101,10 @@ async function putSettings(ctx, request) {
 async function myCheckin(ctx, periodId) {
   return ctx.db
     .prepare(
-      "SELECT status, checked_in_at, left_at FROM ci_checkins WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3",
+      `SELECT c.checked_in_at, COALESCE(l.status, 'left') AS status
+       FROM ci_checkins c
+       LEFT JOIN ci_lists l ON l.challenge_id = c.challenge_id AND l.period_id = c.period_id AND l.user_id = c.user_id
+       WHERE c.challenge_id = ?1 AND c.period_id = ?2 AND c.user_id = ?3`,
       periodId,
       ctx.userId,
     )
@@ -114,15 +118,15 @@ async function canBrowse(ctx, periodId) {
   return (await myCheckin(ctx, periodId))?.status === "active";
 }
 
-// Everyone on the period's list, in check-in order. Read through ctx.lists, so it is reloaded from
+// Everyone on the period's list, in join order. Read through ctx.lists, so it is reloaded from
 // D1 only after a write to this list (each write below includes ctx.lists.changed(periodId)).
 function activeRows(ctx, periodId) {
   return ctx.lists.cached(periodId, async () => {
     const rows = await ctx.db
       .prepare(
-        `SELECT member_id, user_id FROM ci_checkins
+        `SELECT member_id, user_id FROM ci_lists
          WHERE challenge_id = ?1 AND period_id = ?2 AND status = 'active'
-         ORDER BY checked_in_at ASC`,
+         ORDER BY joined_at ASC`,
         periodId,
       )
       .all();
@@ -130,7 +134,7 @@ function activeRows(ctx, periodId) {
   });
 }
 
-// The other active members of the period, in check-in order.
+// The other active members of the period, in join order.
 async function memberRows(ctx, periodId) {
   return (await activeRows(ctx, periodId)).filter((r) => r.user_id !== ctx.userId);
 }
@@ -179,14 +183,26 @@ async function checkIn(ctx, periodId, request) {
   }
   const listed = mode === "always" || (mode === "ask" && body.join);
   await ctx.db.batch([
+    // Runs before the check-in insert, so only a first check-in joins the list.
+    ...(listed
+      ? [
+          ctx.db.prepare(
+            `INSERT INTO ci_lists (challenge_id, period_id, user_id, member_id, status, joined_at)
+             SELECT ?1, ?2, ?3, ?4, 'active', ?5
+             WHERE NOT EXISTS (SELECT 1 FROM ci_checkins WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3)`,
+            periodId,
+            ctx.userId,
+            crypto.randomUUID(),
+            ctx.now,
+          ),
+        ]
+      : []),
     ctx.db.prepare(
-      `INSERT INTO ci_checkins (challenge_id, period_id, user_id, member_id, status, checked_in_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+      `INSERT INTO ci_checkins (challenge_id, period_id, user_id, checked_in_at)
+       VALUES (?1, ?2, ?3, ?4)
        ON CONFLICT (challenge_id, period_id, user_id) DO NOTHING`,
       periodId,
       ctx.userId,
-      crypto.randomUUID(),
-      listed ? "active" : "left",
       ctx.now,
     ),
     ctx.lists.changed(periodId),
@@ -204,10 +220,14 @@ async function join(ctx, periodId) {
   await requireCurrentAndProfile(ctx, periodId);
   const [res] = await ctx.db.batch([
     ctx.db.prepare(
-      `UPDATE ci_checkins SET status = 'active', left_at = NULL
-       WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3`,
+      `INSERT INTO ci_lists (challenge_id, period_id, user_id, member_id, status, joined_at)
+       SELECT ?1, ?2, ?3, ?4, 'active', ?5
+       WHERE EXISTS (SELECT 1 FROM ci_checkins WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3)
+       ON CONFLICT (challenge_id, period_id, user_id) DO UPDATE SET status = 'active', left_at = NULL`,
       periodId,
       ctx.userId,
+      crypto.randomUUID(),
+      ctx.now,
     ),
     ctx.lists.changed(periodId),
   ]);
@@ -218,7 +238,7 @@ async function join(ctx, periodId) {
 async function leave(ctx, periodId) {
   await ctx.db.batch([
     ctx.db.prepare(
-      `UPDATE ci_checkins SET status = 'left', left_at = ?4
+      `UPDATE ci_lists SET status = 'left', left_at = ?4
        WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3 AND status = 'active'`,
       periodId,
       ctx.userId,
@@ -256,7 +276,7 @@ async function getMembers(ctx, periodId, url) {
 }
 
 // Consecutive check-in days ending today, or ending yesterday if today isn't checked in yet
-// (the streak isn't broken until the day is over). Leaving a list still counts as checked in.
+// (the streak isn't broken until the day is over). Checking in without being on the list counts.
 export function streakFrom(periodIds, today) {
   const days = new Set(periodIds);
   let day = days.has(today) ? today : addDays(today, -1);
@@ -271,7 +291,7 @@ export function streakFrom(periodIds, today) {
 async function checkinRows(ctx) {
   const rows = await ctx.db
     .prepare(
-      `SELECT period_id, checked_in_at, status FROM ci_checkins
+      `SELECT period_id, checked_in_at FROM ci_checkins
        WHERE challenge_id = ?1 AND user_id = ?2 ORDER BY period_id DESC LIMIT 366`,
       ctx.userId,
     )
@@ -319,15 +339,20 @@ const dataLifecycle = {
   data_version: 1,
   async purgeUser(ctx) {
     await ctx.db.batch([
-      ...["ci_checkins", "ci_settings"].map((t) => ctx.db.prepare(`DELETE FROM ${t} WHERE challenge_id = ?1 AND user_id = ?2`, ctx.userId)),
+      ...["ci_lists", "ci_checkins", "ci_settings"].map((t) => ctx.db.prepare(`DELETE FROM ${t} WHERE challenge_id = ?1 AND user_id = ?2`, ctx.userId)),
       // Only the current period's list can be browsed.
       ctx.lists.changed(currentPeriod(ctx).period_id),
     ]);
   },
-  // Daily clean-up (Cron Trigger): the cache version rows of closed lists. Check-ins themselves
-  // stay; they are the user's history and streak.
+  // Daily clean-up (Cron Trigger): closed lists, with their cache version rows; nothing may return
+  // them anyway (docs/product.md, "No past lists"). Check-ins stay: they are the user's history
+  // and streak.
   async prune(ctx) {
-    await ctx.lists.forgetBefore(currentPeriod(ctx).period_id).run();
+    const open = currentPeriod(ctx).period_id;
+    await ctx.db.batch([
+      ctx.db.prepare("DELETE FROM ci_lists WHERE challenge_id = ?1 AND period_id < ?2", open),
+      ctx.lists.forgetBefore(open),
+    ]);
   },
   onDisable: "retain",
 };

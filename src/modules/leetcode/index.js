@@ -1,5 +1,5 @@
 import { HttpError, L, json, localize, readJson } from "../../platform/http.js";
-import { periodAt, periodBounds, addDays, isPeriodId } from "../../platform/period.js";
+import { periodAt, periodBounds, isPeriodId } from "../../platform/period.js";
 import { getProvider, findEvidence, aboutContainsToken, ProviderError } from "./provider.js";
 import { joinModeFrom } from "../../platform/join-mode.js";
 import poolV1 from "./pool-v1.js";
@@ -79,6 +79,8 @@ function validateConfig(cfg) {
   } catch {
     fail(`invalid timezone ${cfg.schedule.timezone}`);
   }
+  // Past lists can never be browsed (docs/product.md, "No past lists"), so there is nothing to set.
+  if (cfg.history !== undefined) fail("history (a look-back at past lists) is not allowed");
   if (!POOLS[cfg.problem_pool?.version]) fail(`unknown problem pool ${cfg.problem_pool?.version}`);
   if (cfg.problem_pool.site !== SITE) fail(`only ${SITE} is supported`);
   // Ownership and server-side evidence cannot be configured away.
@@ -209,33 +211,20 @@ function publicPeriod(p) {
   };
 }
 
-// Periods whose member list may still be viewed: the current one, plus the previous one while
-// the optional look-back window is open.
+// The only period whose list can be browsed: the current one. A list closes for good when its
+// period ends; nothing returns the members of a past period to anyone, that period's members
+// included (docs/product.md, "No past lists").
+function currentPeriodId(ctx) {
+  return periodAt(ctx.now, ctx.config.schedule.timezone).period_id;
+}
+
 function listOpen(ctx, periodId) {
-  const cfg = ctx.config;
-  const cur = periodAt(ctx.now, cfg.schedule.timezone);
-  if (periodId === cur.period_id) return true;
-  if (!cfg.history.enabled) return false;
-  for (let i = 1; i <= cfg.history.latest_periods_only; i++) {
-    const pid = addDays(cur.period_id, -i);
-    if (pid !== periodId) continue;
-    const { ends_at } = periodBounds(pid, cfg.schedule.timezone);
-    return ctx.now < ends_at + cfg.history.grace_hours_when_enabled * 3600_000;
-  }
-  return false;
+  return periodId === currentPeriodId(ctx);
 }
 
-// Periods whose member lists may be browsed right now: the current one plus any look-back.
-function openPeriodIds(ctx) {
-  const cfg = ctx.config;
-  const cur = periodAt(ctx.now, cfg.schedule.timezone).period_id;
-  const back = cfg.history.enabled ? cfg.history.latest_periods_only : 0;
-  return Array.from({ length: back + 1 }, (_, i) => addDays(cur, -i));
-}
-
-// Statements marking every open list as changed, for writes that can affect any of them.
+// Statement marking the open list as changed, for writes that can affect it.
 function openListsChanged(ctx) {
-  return openPeriodIds(ctx).map((pid) => ctx.lists.changed(pid));
+  return [ctx.lists.changed(currentPeriodId(ctx))];
 }
 
 function requirePeriodId(pid) {
@@ -853,10 +842,9 @@ async function rejoinMembership(ctx, periodId, request) {
 async function getHistory(ctx) {
   const rows = await ctx.db
     .prepare(
-      `SELECT c.period_id, c.accepted_at, c.verified_at, p.problem, m.status AS membership
+      `SELECT c.period_id, c.accepted_at, c.verified_at, p.problem
        FROM lc_completions c
        JOIN lc_periods p ON p.challenge_id = c.challenge_id AND p.period_id = c.period_id
-       LEFT JOIN lc_memberships m ON m.challenge_id = c.challenge_id AND m.period_id = c.period_id AND m.user_id = c.user_id
        WHERE c.challenge_id = ?1 AND c.user_id = ?2
        ORDER BY c.period_id DESC LIMIT 100`,
       ctx.userId,
@@ -874,16 +862,13 @@ async function getHistory(ctx) {
 
 // ---------- people for the home page ----------
 
-// Users this viewer may browse right now through any of this module's open lists (the current
-// period, plus a look-back period when enabled). Server-side only: the platform merges these
-// across challenges and builds the filtered cards, so user ids never reach the browser.
+// Users this viewer may browse right now through this module's open list (the current period
+// only). Server-side only: the platform merges these across challenges and builds the filtered
+// cards, so user ids never reach the browser.
 async function browsableUserIds(ctx) {
-  const state = await loadState(ctx);
-  const ids = [];
-  for (const periodId of openPeriodIds(ctx)) {
-    if (await canBrowse(ctx, periodId, state)) ids.push(...(await memberRows(ctx, periodId)).map((r) => r.user_id));
-  }
-  return ids;
+  const periodId = currentPeriodId(ctx);
+  if (!(await canBrowse(ctx, periodId, await loadState(ctx)))) return [];
+  return (await memberRows(ctx, periodId)).map((r) => r.user_id);
 }
 
 // ---------- routing ----------
@@ -934,14 +919,16 @@ const dataLifecycle = {
     ]);
   },
   // Daily clean-up (Cron Trigger): rows no request reads once their time is over. Expired binding
-  // tokens; the binding locks of periods whose list has closed (they only serve that period's
-  // checks); and attempts, which only the cooldown, the per-minute cap and the current period's
-  // status read, kept ATTEMPT_RETENTION_DAYS so a disputed check can still be looked into.
-  // Completions, memberships, badges and periods are the user's history and stay.
+  // tokens; closed lists (docs/product.md, "No past lists"); the binding locks of periods whose
+  // list has closed (they only serve that period's checks); and attempts, which only the
+  // cooldown, the per-minute cap and the current period's status read, kept
+  // ATTEMPT_RETENTION_DAYS so a disputed check can still be looked into. Completions, badges and
+  // periods are the user's history and stay.
   async prune(ctx) {
-    const oldestOpen = openPeriodIds(ctx).at(-1);
+    const oldestOpen = currentPeriodId(ctx);
     await ctx.db.batch([
       ctx.db.prepare("DELETE FROM lc_binding_tokens WHERE challenge_id = ?1 AND expires_at <= ?2", ctx.now),
+      ctx.db.prepare("DELETE FROM lc_memberships WHERE challenge_id = ?1 AND period_id < ?2", oldestOpen),
       ctx.db.prepare("DELETE FROM lc_period_locks WHERE challenge_id = ?1 AND period_id < ?2", oldestOpen),
       ctx.db.prepare("DELETE FROM lc_attempts WHERE challenge_id = ?1 AND requested_at < ?2", ctx.now - ATTEMPT_RETENTION_DAYS * 86400_000),
       ctx.lists.forgetBefore(oldestOpen),

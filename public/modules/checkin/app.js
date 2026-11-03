@@ -46,9 +46,6 @@ const t = makeT({
     total: "累计签到 {n} 天",
     col_period: "日期",
     col_time: "签到时间",
-    col_list: "名单",
-    m_active: "已展示",
-    m_left: "已退出",
     none: "还没有签到记录。",
     purge: "删除我在本挑战的全部数据",
     purge_confirm: "将删除你在本挑战的全部签到记录和名单资格（个人资料不受影响），无法恢复。确定吗？",
@@ -95,9 +92,6 @@ const t = makeT({
     total: "Total check-ins: {n}",
     col_period: "Date",
     col_time: "Checked in",
-    col_list: "List",
-    m_active: "Shown",
-    m_left: "Left",
     none: "No check-ins yet.",
     purge: "Delete all my data in this challenge",
     purge_confirm: "This deletes all your check-ins and list memberships in this challenge (your profile is kept). This cannot be undone. Continue?",
@@ -301,18 +295,12 @@ export async function mount(root, { challengeId, challenge }) {
           ? h(
               "table",
               { class: "history" },
-              h("thead", {}, h("tr", {}, h("th", {}, t("col_period")), h("th", {}, t("col_time")), h("th", {}, t("col_list")))),
+              h("thead", {}, h("tr", {}, h("th", {}, t("col_period")), h("th", {}, t("col_time")))),
               h(
                 "tbody",
                 {},
                 data.checkins.map((c) =>
-                  h(
-                    "tr",
-                    {},
-                    h("td", {}, c.period_id),
-                    h("td", {}, fmtTime(c.checked_in_at)),
-                    h("td", {}, t(c.status === "active" ? "m_active" : "m_left")),
-                  ),
+                  h("tr", {}, h("td", {}, c.period_id), h("td", {}, fmtTime(c.checked_in_at))),
                 ),
               ),
             )
