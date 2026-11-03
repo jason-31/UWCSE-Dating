@@ -31,16 +31,24 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # In a new account the Worker does not exist yet (API error 10007): then there is no key, and
+      # wrangler secret put below creates the Worker with DATA_KEY as its first secret.
       - name: Refuse if DATA_KEY already exists
         run: |
-          npx wrangler secret list --format json > "$RUNNER_TEMP/secrets.json"
-          node -e '
-            const names = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map((s) => s.name);
-            if (names.includes("DATA_KEY")) {
-              console.log("::error::The Worker already has a DATA_KEY. Replacing it would make all stored data unreadable.");
-              process.exit(1);
-            }
-          ' "$RUNNER_TEMP/secrets.json"
+          if npx wrangler secret list --format json > "$RUNNER_TEMP/secrets.json" 2> "$RUNNER_TEMP/secrets.err"; then
+            node -e '
+              const names = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map((s) => s.name);
+              if (names.includes("DATA_KEY")) {
+                console.log("::error::The Worker already has a DATA_KEY. Replacing it would make all stored data unreadable.");
+                process.exit(1);
+              }
+            ' "$RUNNER_TEMP/secrets.json"
+          elif grep -q "10007" "$RUNNER_TEMP/secrets.err" "$RUNNER_TEMP/secrets.json"; then
+            echo "The Worker does not exist yet; DATA_KEY will be its first secret."
+          else
+            cat "$RUNNER_TEMP/secrets.err"
+            exit 1
+          fi
       # 32 random bytes, base64-encoded, piped directly into wrangler (never echoed).
       - name: Create DATA_KEY
         run: openssl rand -base64 32 | npx wrangler secret put DATA_KEY

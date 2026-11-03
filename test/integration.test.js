@@ -13,7 +13,7 @@ import { vault, emailHash } from "../src/platform/vault.js";
 import { findUser } from "../src/platform/auth.js";
 import { assertMayRegister } from "../src/platform/deletions.js";
 import { apiLimiter } from "../src/platform/rate-limit.js";
-import { periodAt } from "../src/platform/period.js";
+import { periodAt, addDays } from "../src/platform/period.js";
 import { SITE } from "../src/site.config.js";
 import { CHALLENGES } from "../src/challenges.config.js";
 import leetcode from "../src/modules/leetcode/index.js";
@@ -226,6 +226,9 @@ test("join this period's list automatically: always, ask or never, in both chall
   assert.equal((await checkin(env, "k")).status, 400);
   assert.equal((await call(env, "k", "POST", `${ci}/periods/${today()}/checkin`, { join: false })).status, 200);
   assert.deepEqual(await listed(), ["a", "n"]);
+  // Checking in again changes nothing.
+  assert.equal((await call(env, "k", "POST", `${ci}/periods/${today()}/checkin`, { join: true })).status, 200);
+  assert.deepEqual(await listed(), ["a", "n"]);
   assert.equal((await call(env, "k", "PUT", `${ci}/settings`, { join_mode: "sometimes" })).status, 400);
 
   // LeetCode: only "always" joins on verification; "ask" says so in the answer.
@@ -287,6 +290,50 @@ test("per-challenge relations: friends through check-in, dating only through Lee
   assert.deepEqual((await rel("a", "leetcode-daily")).data.relations, []);
   assert.equal((await call(env, "b", "GET", `${lc}/periods/${today()}/members`)).data.total, 0);
   assert.deepEqual(common(await ciMembers(env, "b")), [["FRIENDSHIP"]]);
+});
+
+test("no past lists: nothing returns a closed period's members, even to its own members", async () => {
+  const env = createEnv();
+  const yesterday = addDays(today(), -1);
+  await register(env, "a");
+  await register(env, "b");
+  const [a, b] = [await findUser(env, email("a")), await findUser(env, email("b"))];
+  // Both were on yesterday's lists in both challenges; only a is on today's.
+  env.DB.sqlite.exec(`
+    INSERT INTO ci_checkins (challenge_id, period_id, user_id, checked_in_at)
+      VALUES ('daily-checkin', '${yesterday}', '${a}', 1), ('daily-checkin', '${yesterday}', '${b}', 1);
+    INSERT INTO ci_lists (challenge_id, period_id, user_id, member_id, status, joined_at)
+      VALUES ('daily-checkin', '${yesterday}', '${a}', 'ci-a-q7', 'active', 1), ('daily-checkin', '${yesterday}', '${b}', 'ci-b-q8', 'active', 1);
+    INSERT INTO lc_enrollments (challenge_id, user_id, member_id, status, join_mode, created_at, updated_at)
+      VALUES ('leetcode-daily', '${a}', 'lc-a-q9', 'active', 'always', 1, 1), ('leetcode-daily', '${b}', 'lc-b-q0', 'active', 'always', 1, 1);
+    INSERT INTO lc_periods (challenge_id, period_id, starts_at, ends_at, timezone, problem, pool_version, config_version, module_version, created_at)
+      VALUES ('leetcode-daily', '${yesterday}', 0, 1, 'America/Los_Angeles', '{"slug":"x"}', 'pool-v1', 1, 1, 0);
+    INSERT INTO lc_completions (challenge_id, period_id, user_id, problem_slug, accepted_at, submission_id, source, attempt_id, verified_at)
+      VALUES ('leetcode-daily', '${yesterday}', '${a}', 'x', 1, 's1', 'mock', 1, 1), ('leetcode-daily', '${yesterday}', '${b}', 'x', 1, 'sub-b-q5', 'mock', 2, 1);
+    INSERT INTO lc_memberships (challenge_id, period_id, user_id, status, joined_at)
+      VALUES ('leetcode-daily', '${yesterday}', '${a}', 'active', 1), ('leetcode-daily', '${yesterday}', '${b}', 'active', 1);`);
+  await checkin(env, "a");
+
+  for (const path of [
+    `/api/challenges/daily-checkin/periods/${yesterday}/members`,
+    `/api/challenges/leetcode-daily/periods/${yesterday}/members`,
+  ]) {
+    const res = await call(env, "a", "GET", path);
+    assert.equal(res.status, 403, path);
+    assert.equal(res.data.code, "list_closed");
+  }
+  assert.equal((await ciMembers(env, "a")).total, 0); // b is only on yesterday's list
+  const home = (await call(env, "a", "GET", "/api/people")).data;
+  assert.ok(home.sections.every((x) => x.total === 0));
+  // History endpoints carry one's own records only.
+  const ciHistory = JSON.stringify((await call(env, "a", "GET", "/api/challenges/daily-checkin/history")).data);
+  const lcHistory = JSON.stringify((await call(env, "a", "GET", "/api/challenges/leetcode-daily/history")).data);
+  for (const leak of [b, "ci-b-q8", "lc-b-q0", "sub-b-q5", email("b")]) {
+    assert.ok(!ciHistory.includes(leak) && !lcHistory.includes(leak), `history leaks ${leak}`);
+  }
+  // And no configuration can turn a look-back on.
+  const base = CHALLENGES.find((c) => c.challenge_id === "leetcode-daily");
+  assert.throws(() => leetcode.validateConfig({ ...base, history: { enabled: true } }), /look-back/);
 });
 
 test("home page returns a first page per relation and the rest through offset", async () => {
@@ -452,6 +499,14 @@ test("daily clean-up deletes only rows no request needs any more", async () => {
       VALUES ${period(old)}, ${period(today())};
     INSERT INTO lc_period_locks (challenge_id, period_id, user_id, site, username, binding_version, locked_at)
       VALUES ('leetcode-daily', '${old}', 'u1', 'leetcode.com', 'a', 1, 0), ('leetcode-daily', '${today()}', 'u1', 'leetcode.com', 'a', 1, 0);
+    INSERT INTO lc_completions (challenge_id, period_id, user_id, problem_slug, accepted_at, submission_id, source, attempt_id, verified_at)
+      VALUES ('leetcode-daily', '${old}', 'u1', 'x', 0, 's1', 'mock', 1, 0), ('leetcode-daily', '${today()}', 'u1', 'x', 0, 's2', 'mock', 2, 0);
+    INSERT INTO lc_memberships (challenge_id, period_id, user_id, status, joined_at)
+      VALUES ('leetcode-daily', '${old}', 'u1', 'active', 0), ('leetcode-daily', '${today()}', 'u1', 'active', 0);
+    INSERT INTO ci_checkins (challenge_id, period_id, user_id, checked_in_at)
+      VALUES ('daily-checkin', '${old}', 'u1', 0), ('daily-checkin', '${today()}', 'u1', 0);
+    INSERT INTO ci_lists (challenge_id, period_id, user_id, member_id, status, joined_at)
+      VALUES ('daily-checkin', '${old}', 'u1', 'm1', 'active', 0), ('daily-checkin', '${today()}', 'u1', 'm2', 'left', 0);
     INSERT INTO cache_versions (name, version) VALUES
       ('list:leetcode-daily:${old}', 1), ('list:leetcode-daily:${today()}', 1), ('list:daily-checkin:${old}', 1), ('list:daily-checkin:${today()}', 1);`);
 
@@ -459,7 +514,7 @@ test("daily clean-up deletes only rows no request needs any more", async () => {
   env.BUCKET.objects.set("avatars/orphan-old", { bytes: new Uint8Array(1), uploaded: new Date(now - 2 * day) });
   env.BUCKET.objects.set("avatars/orphan-new", { bytes: new Uint8Array(1), uploaded: new Date(now) });
 
-  await worker.scheduled({ cron: "17 11 * * *" }, env);
+  await worker.scheduled({ cron: "17 8 * * *" }, env);
   const col = (sql) => env.DB.sqlite.prepare(sql).all().map((r) => Object.values(r)[0]);
   assert.deepEqual(col("SELECT id FROM avatars ORDER BY id"), [id(fresh), id(used), id(latest)].sort());
   assert.deepEqual([...env.BUCKET.objects.keys()].sort(), [`avatars/${id(fresh)}`, `avatars/${id(used)}`, `avatars/${id(latest)}`, "avatars/orphan-new"].sort());
@@ -472,6 +527,11 @@ test("daily clean-up deletes only rows no request needs any more", async () => {
   assert.deepEqual(col("SELECT period_id FROM lc_attempts"), [today()]);
   assert.deepEqual(col("SELECT period_id FROM lc_period_locks"), [today()]);
   assert.deepEqual(col("SELECT period_id FROM lc_periods ORDER BY period_id"), [old, today()]); // history stays
+  assert.deepEqual(col("SELECT period_id FROM lc_completions ORDER BY period_id"), [old, today()]);
+  assert.deepEqual(col("SELECT period_id FROM ci_checkins ORDER BY period_id"), [old, today()]);
+  // Closed lists go, even rows of people who had left them.
+  assert.deepEqual(col("SELECT period_id FROM lc_memberships"), [today()]);
+  assert.deepEqual(col("SELECT period_id FROM ci_lists"), [today()]);
   assert.deepEqual(col("SELECT name FROM cache_versions WHERE name LIKE 'list:%' ORDER BY name"), [
     `list:daily-checkin:${today()}`,
     `list:leetcode-daily:${today()}`,
@@ -712,7 +772,7 @@ test("logs carry no personal data, even when requests and the clean-up fail", as
     // A clean-up step that fails.
     failing.DB.sqlite.exec(`INSERT INTO avatars (id, owner_hash, content_type, size, created_at) VALUES ('${"0".repeat(32)}', 'h', 'image/png', 1, 0)`);
     failing.BUCKET.delete = async () => { throw new Error("r2 down"); };
-    await assert.rejects(worker.scheduled({ cron: "17 11 * * *" }, failing), /scheduled run failed: platform/);
+    await assert.rejects(worker.scheduled({ cron: "17 8 * * *" }, failing), /scheduled run failed: platform/);
   } finally {
     Object.assign(console, saved);
   }

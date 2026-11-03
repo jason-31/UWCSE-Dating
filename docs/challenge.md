@@ -121,7 +121,7 @@ Recommended routes, which both existing modules follow so the platform and users
 Returns the **user ids** that `ctx.userId` may browse *right now* through any of this challenge's lists.
 
 - Use exactly the same rules as your members endpoint: the list is still open, the viewer is an active member of that period, and the viewer's profile is complete.
-- Include the members of every list the viewer can open, e.g. the current period plus a look-back period if you support one.
+- Include the members of the current period's list only; past lists are never browsable.
 - Don't filter by relations. The platform does that.
 - Don't include `ctx.userId`. Duplicates are fine.
 
@@ -140,7 +140,7 @@ const dataLifecycle = {
 
 `purgeUser` is called for every challenge when a user deletes their account, before the platform deletes the profile and identity. It must remove **all** of the user's rows in this module, for example with `ctx.db.batch([...])`.
 
-`prune` is optional. The platform's daily clean-up (a Cron Trigger) calls it for every challenge, enabled or not, with `ctx.userId` set to `null`, `ctx.profiles` set to `null` and `ctx.now` set to the run time. It should delete what no request reads any more, such as expired tokens and the details of closed periods, and end with `ctx.lists.forgetBefore(oldestOpenPeriodId)`. It must keep what users see as their history. A failing `prune` is logged and fails the run without stopping the other challenges.
+`prune` is optional. The platform's daily clean-up (a Cron Trigger) calls it for every challenge, enabled or not, with `ctx.userId` set to `null`, `ctx.profiles` set to `null` and `ctx.now` set to the run time. It must delete the list rows of closed periods (see "No past lists" below) and should delete whatever else no request reads any more, such as expired tokens, then end with `ctx.lists.forgetBefore(oldestOpenPeriodId)`. It must keep what users see as their history. A failing `prune` is logged and fails the run without stopping the other challenges.
 
 ## The context object
 
@@ -175,7 +175,7 @@ ctx.db.batch([stmt, ...])        // → atomic batch (D1 transaction)
 
 ```js
 const row = await ctx.db
-  .prepare("SELECT status FROM ci_checkins WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3", periodId, ctx.userId)
+  .prepare("SELECT status FROM ci_lists WHERE challenge_id = ?1 AND period_id = ?2 AND user_id = ?3", periodId, ctx.userId)
   .first();
 ```
 
@@ -267,7 +267,8 @@ A module with a non-daily schedule (e.g. weekly) can define its own period ids a
 - **Same task for everyone in a period.** The task is derived only from the challenge config and the period. Nothing about the requesting user may change it, and nobody can re-roll it. If it is generated, persist it once per period using a primary key and `INSERT OR IGNORE`, then re-read it (see `ensurePeriod` in the LeetCode module).
 - **Server-side completion.** Decide completion on the server. Never accept screenshots or client claims as proof.
 - **Explicit consent to be listed.** Store each person's "Join this period's list automatically" choice (`always`, `ask`, `never`; validate with `joinModeFrom` from `platform/join-mode.js`) and list them on completion only as it says. With `ask`, take the answer with the completing action or offer joining right after it; with `never`, keep joining by hand possible. Show the choice with `joinModeField` from `public/join-mode.js`, so it reads the same in every challenge.
-- **Browsing requires membership.** Only active members of a period may browse that period's list, and the list closes when its period ends. An optional look-back must be limited to members of that period.
+- **Browsing requires membership.** Only active members of the current period may browse its list.
+- **No past lists.** When a period ends its list is closed for good: no endpoint may return the members, cards or member count of a past period to anyone, that period's members included, and no config may turn on a look-back. A user's history endpoint returns only their own records, and not whether they were on a list. Keep list rows in their own table, apart from completions or check-ins, so that `prune` can delete a closed period's list and leave the history. See docs/product.md.
 - **Cards only from `ctx.profiles.cards`.** Drop `null` results, never return `user_id` to the browser, and use a per-challenge opaque `member_id` instead.
 - **Lists through `ctx.lists`.** Read member lists with `ctx.lists.cached`, and bump them with `ctx.lists.changed` in the same batch as every write to list rows.
 - **Nothing identifying in the clear.** Store anything that identifies or describes a person through `ctx.vault`, and never put such values in logs.
@@ -302,16 +303,16 @@ async function getMembers(ctx, periodId, url) {
 - Store timestamps as UTC epoch milliseconds (`INTEGER`).
 - Use a random `member_id` (e.g. `crypto.randomUUID()`) wherever another user sees a person.
 
-Example (`migrations/0003_checkin.sql`):
+Example (`migrations/0012_checkin_lists.sql`): the list, apart from the check-ins it is deleted without.
 
 ```sql
-CREATE TABLE ci_checkins (
+CREATE TABLE ci_lists (
   challenge_id TEXT NOT NULL,
   period_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   member_id TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('active', 'left')),
-  checked_in_at INTEGER NOT NULL,
+  joined_at INTEGER NOT NULL,
   left_at INTEGER,
   PRIMARY KEY (challenge_id, period_id, user_id)
 );

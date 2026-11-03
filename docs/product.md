@@ -52,7 +52,8 @@ Rules every challenge follows:
 - **The same task for everyone in a period.** The task depends only on the challenge's configuration and the period, is fixed once drawn, and is never re-drawn for anyone.
 - **Completion is decided by the server** from evidence it obtains itself. Screenshots, self-reports and client-supplied data prove nothing.
 - **Explicit consent to be listed.** Every challenge offers the same per-person choice, "Join this period's list automatically": always, ask each time, or never. Joining by hand stays possible with never.
-- **Browsing a list requires being on it**, actively, with a complete profile. A list closes when its period ends (a challenge may allow a short look-back for that period's members).
+- **Browsing a list requires being on it**, actively, with a complete profile.
+- **No past lists.** A list closes for good when its period ends. From then on nothing returns its members, their cards or their number to anyone, the members of that period included: no look-back, no archive, no "who was here yesterday", and no endpoint that could be combined into one. Each person keeps only their own history (which days they took part, never who else did, nor whether they themselves were on the list). The record of who was on a list is deleted by the first daily clean-up after the period ends (soon after midnight). This is not a setting; challenges must not offer one.
 - Leaving a list is always possible. Challenges never read each other's data, and nothing earned in one counts in another.
 
 The **home page** shows, on the left, the open challenges; on the right, everyone the viewer can browse right now through any list, de-duplicated and grouped by the relations the viewer seeks in any enabled challenge. A person's common relations there are those matching in any challenge where the two share a list; someone sharing several relations with the viewer appears under each. Each group shows its first 24 people, with "Show more" for the rest. Where someone was met is never shown, though a relation sought in only one challenge implies it (the privacy notice says so).
@@ -67,7 +68,7 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 - Verifying proves that an Accepted submission exists on that account. It does not prove the person solved the problem alone.
 - Leaving today's list is possible at any time; checking again does not put someone back, rejoining is a separate, explicit action.
 - **Data source**: LeetCode's GraphQL endpoint. Verification can be paused (`verification.paused`) without affecting lists and history.
-- Badges and a look-back at yesterday's list are implemented but switched off.
+- Badges are implemented but switched off.
 
 ### Daily Check-in
 
@@ -83,8 +84,8 @@ The **home page** shows, on the left, the open challenges; on the right, everyon
 ## Data kept and for how long
 
 - Everything personal is encrypted at rest (see [oversight.md](oversight.md), rule 5).
-- History that people see as theirs (check-ins, completions, list memberships) is kept until they delete it.
-- The daily clean-up deletes: expired sessions (30 days after sign-in); uploads no profile uses, after a day (except a registered person's latest upload); LeetCode verification attempts after 7 days; binding tokens once expired; upload-attempt counts after 30 days; deletion tombstones once the locks they protect have expired.
+- History that people see as theirs (check-ins, completions) is kept until they delete it.
+- The daily clean-up (00:17 or 01:17 in Seattle, depending on daylight saving) deletes: the lists of periods that have ended, including who left them; expired sessions (30 days after sign-in); uploads no profile uses, after a day (except a registered person's latest upload); LeetCode verification attempts after 7 days; binding tokens once expired; upload-attempt counts after 30 days; deletion tombstones once the locks they protect have expired.
 
 ## Deliberately not built
 
@@ -112,7 +113,7 @@ Messages, likes, connection requests, matches, "who viewed me" or any record of 
 | A15 | Someone leaves today's list and checks again | They stay off the list until they rejoin explicitly |
 | A16 | A new day, including a daylight-saving change | A new period by Los Angeles midnight; yesterday's membership does not carry over |
 | A17 | A check in flight when the period ends | Finishes within 60 seconds for the old period only |
-| A18 | Look-back off or expired | Other people's cards for that period are unavailable; one's own history remains |
+| A18 | Someone who was on yesterday's list asks for it, its members' cards or its size, through any endpoint | Refused or absent everywhere (list endpoints answer 403 `list_closed`; the home page only shows current lists); their own history remains, and after the daily clean-up the list is no longer in the database |
 | A19 | Someone narrows a contact field or leaves a challenge | Every list that still shows them reflects it on the next request |
 | A20 | Another challenge or a test module is configured | It cannot read this challenge's data; the profile is shared |
 | A21 | Configuration or module changes | Published periods keep their problem and rules; other challenges are unaffected |

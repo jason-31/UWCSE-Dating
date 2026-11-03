@@ -83,7 +83,8 @@ function renderHeader() {
 function renderLangSwitch() {
   const other = lang === "zh" ? "en" : "zh";
   document.getElementById("lang").replaceChildren(
-    h("button", { type: "button", class: "lang-switch", lang: other, onclick: () => setLang(other) }, other === "en" ? "English" : "中文"),
+    // Written in the language it switches to, so it reads for whoever needs it.
+    h("button", { type: "button", class: "lang-switch", lang: other, onclick: () => setLang(other) }, other === "en" ? "switch to English" : "切换成中文"),
   );
 }
 

@@ -27,7 +27,7 @@ Steps that cannot live in code and must be done (or checked) when deploying to C
 
   Rate: 60 requests per 10 seconds; action Block. If the Free editor offers no "starts with", use "wildcard" with `/api/*` and `/auth/*`. If it offers neither, match every path at about 150 per 10 seconds instead (a page view also fetches about 30 static files, which are free but still counted). This is the only protection that stops a flood before it counts against the Workers request quota.
 - [x] **Google OAuth client.** (2026-11-01: sign-in confirmed working.) (2026-11-01: redirect URIs are `https://uwcse.date/auth/callback` and `http://localhost:8799/auth/callback` for local development. The client stays in Testing during the closed beta, so every tester must be listed under Google Auth Platform → Audience → Test users as well as in the Access policy.) Before the public launch: publish the app (Audience → Publish app; openid and email need no verification, but adding a logo triggers brand verification). Sign in with 3-5 ordinary CSE accounts that are not listed as test users. Ask CSE support whether third-party Sign in with Google is allowed for cs.washington.edu accounts.
-- [ ] **Scheduled runs.** After deploying, the Worker's Settings → Trigger events should list `*/5 * * * *` (queued ban requests) and `17 11 * * *` (daily clean-up). A run's outcome shows under the Worker's Cron events; a failed step is logged by name.
+- [ ] **Scheduled runs.** After deploying, the Worker's Settings → Trigger events should list `*/5 * * * *` (queued ban requests) and `17 8 * * *` (daily clean-up). A run's outcome shows under the Worker's Cron events; a failed step is logged by name.
 - [ ] **Accounts.** Hardware-key 2FA on the Cloudflare, Google Cloud and GitHub accounts. Once continuous deployment works (below), deploy only through it and run `wrangler logout` on every machine.
 - [x] **Plan for launch day.** (2026-11-01: staying on the Free plan for now.) Decide whether to run Workers Paid (about $5/month) at least for the launch month; on Free, a busy launch day can exhaust the daily D1 read and Worker request quotas until 00:00 UTC.
 
@@ -36,7 +36,8 @@ Steps that cannot live in code and must be done (or checked) when deploying to C
 Production is deployed only by the public CI workflow from the protected `main` branch (oversight.md rule 2):
 
 - `.github/workflows/deploy.yml` runs on every push to `main` (or by hand): tests, then, in the `production` environment, a check that the Worker has `DATA_KEY`, the D1 migrations and `wrangler deploy`, whose log shows the deployed Version ID.
-- `.github/workflows/provision-key.yml`, run once by hand, creates `DATA_KEY` inside the run and pipes it into `wrangler secret put` without printing it. It refuses to run if the key already exists.
+- `.github/workflows/provision-key.yml`, run once by hand, creates `DATA_KEY` inside the run and pipes it into `wrangler secret put` without printing it. It refuses to run if the key already exists. In a new account it also creates the Worker.
+- `.github/workflows/set-google-secret.yml`, run by hand, puts the production environment's `GOOGLE_CLIENT_SECRET` secret on the Worker. Worker secrets are only ever changed by these workflows, never in the dashboard: in the audit log a dashboard secret change looks the same as a dashboard code change.
 
 - [x] **Public repository.** (2026-11-01: https://github.com/jason-31/UWCSE-Dating.)
 - [ ] **Protect `main`.** Repository → Settings → Rules → Rulesets (or Branches): for `main`, block force pushes and deletions and require changes through pull requests.
