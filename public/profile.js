@@ -1,6 +1,7 @@
 import { h, fill, apiUpload, toast } from "/lib.js";
 import { t, RELATIONS, FIELDS, PROGRAMS, GENDERS, fmtDateTime } from "/i18n.js";
 import { textWeight } from "/text-weight.js";
+import { openCard } from "/card.js";
 
 // Site-wide profile form. The email is the sign-in email: read-only and always on the card.
 // onSubmit(values) returns a promise; extra nodes are rendered just above the submit button.
@@ -216,6 +217,25 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
     );
   }
 
+  // The card as it opens for others, with everything on it: every relation sought, every note and
+  // both contact fields, whoever they are shown to. Built from the form as it is, saved or not.
+  const previewCard = h("button", { type: "button" }, t("preview_card"));
+  previewCard.onclick = () => {
+    const rels = [...state.relations];
+    openCard({
+      avatar_url: options.find((a) => a.id === state.avatar)?.url,
+      nickname: nickname.value.trim(),
+      gender: genderRadios.querySelector("input:checked")?.value ?? "",
+      program: programRadios.querySelector("input:checked")?.value ?? "",
+      research: research.value.trim(),
+      bio: bio.value.trim(),
+      email,
+      common_relations: rels,
+      relation_notes: Object.fromEntries(rels.map((r) => [r, notes[r].value.trim()])),
+      fields: { wechat: wechat.value.trim(), discord: discord.value.trim() },
+    });
+  };
+
   const preview = h("div", { class: "preview" });
   function updatePreview() {
     const rows = [...state.relations].map((rel) => {
@@ -238,6 +258,7 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
       h("h3", {}, t("preview")),
       rows.length ? h("ul", {}, rows) : h("p", { class: "muted" }, t("preview_empty")),
       h("p", { class: "muted small" }, t("preview_footer")),
+      h("div", { class: "row" }, previewCard, h("span", { class: "muted small" }, t("preview_card_hint"))),
     );
   }
   for (const n of Object.values(notes)) n.oninput = updatePreview;
