@@ -1,4 +1,4 @@
-import { h, fill, api, devUser, setDevUser, toast } from "/lib.js";
+import { h, fill, api, devUser, setDevUser, DEV_SIGNED_OUT, toast } from "/lib.js";
 import { openCard } from "/card.js";
 import { profileForm } from "/profile.js";
 import { aboutPage } from "/about.js";
@@ -43,7 +43,7 @@ function renderBanned() {
 
 // Signed out (Google sign-in): the About page with a sign-in button, plus why a sign-in failed.
 function renderSignedOut() {
-  if (me.auth !== "google") {
+  if (me.auth !== "google" && !me.dev_mode) {
     // Behind Cloudflare Access a missing identity means Access isn't in front of this request.
     app.replaceChildren(h("div", { class: "panel" }, h("h2", {}, t("cannot_sign_in"))));
     return;
@@ -65,6 +65,8 @@ function renderHeader() {
   const signOut = h("a", { href: "#" }, t("sign_out"));
   signOut.onclick = async (e) => {
     e.preventDefault();
+    // Dev mode: act as nobody until signing in again, which returns to the dev identity.
+    if (me.dev_mode) setDevUser(DEV_SIGNED_OUT);
     await api("/api/logout", { method: "POST" });
     location.href = "/";
   };
@@ -75,7 +77,9 @@ function renderHeader() {
     h("a", { href: "#/privacy" }, t("privacy")),
     me.registered && !me.banned ? h("a", { href: "#/profile" }, t("my_profile")) : "",
     me.signed_in && h("span", { class: "muted" }, me.email),
-    me.signed_in && me.auth === "google" && signOut,
+    me.signed_in && (me.auth === "google" || me.dev_mode) && signOut,
+    // Where people look for it first; the page below has the main button too.
+    !me.signed_in && (me.auth === "google" || me.dev_mode) && h("a", { class: "header-sign-in", href: "/auth/login" }, t("sign_in")),
   );
   renderLangSwitch();
 }
@@ -91,7 +95,7 @@ function renderLangSwitch() {
 function renderDevBar() {
   if (!me.dev_mode) return;
   const bar = document.getElementById("devbar");
-  const input = h("input", { value: devUser(), placeholder: t("dev_placeholder") });
+  const input = h("input", { value: devUser() === DEV_SIGNED_OUT ? "" : devUser(), placeholder: t("dev_placeholder") });
   bar.hidden = false;
   bar.replaceChildren(
     h("strong", {}, t("dev_mode")),
@@ -99,6 +103,14 @@ function renderDevBar() {
     input,
     h("button", { onclick: () => { setDevUser(input.value.trim()); location.reload(); } }, t("switch")),
   );
+  // Signed out through the header: any sign-in button returns to the dev identity instead of
+  // going to Google.
+  document.addEventListener("click", (e) => {
+    if (devUser() !== DEV_SIGNED_OUT || !e.target.closest('a[href="/auth/login"]')) return;
+    e.preventDefault();
+    setDevUser("");
+    location.href = "/";
+  });
 }
 
 // Cloudflare Access proved the email; unknown emails register here by creating the site-wide
