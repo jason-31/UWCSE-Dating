@@ -36,7 +36,8 @@ Steps that cannot live in code and must be done (or checked) when deploying to C
 Production is deployed only by the public CI workflow from the protected `main` branch (oversight.md rule 2):
 
 - `.github/workflows/deploy.yml` runs on every push to `main` (or by hand): tests, then, in the `production` environment, a check that the Worker has `DATA_KEY`, the D1 migrations and `wrangler deploy`, whose log shows the deployed Version ID.
-- `.github/workflows/provision-key.yml`, run once by hand, creates `DATA_KEY` inside the run and pipes it into `wrangler secret put` without printing it. It refuses to run if the key already exists.
+- `.github/workflows/provision-key.yml`, run once by hand, creates `DATA_KEY` inside the run and pipes it into `wrangler secret put` without printing it. It refuses to run if the key already exists. In a new account it also creates the Worker.
+- `.github/workflows/set-google-secret.yml`, run by hand, puts the production environment's `GOOGLE_CLIENT_SECRET` secret on the Worker. Worker secrets are only ever changed by these workflows, never in the dashboard: in the audit log a dashboard secret change looks the same as a dashboard code change.
 
 - [x] **Public repository.** (2026-11-01: https://github.com/jason-31/UWCSE-Dating.)
 - [ ] **Protect `main`.** Repository → Settings → Rules → Rulesets (or Branches): for `main`, block force pushes and deletions and require changes through pull requests.
