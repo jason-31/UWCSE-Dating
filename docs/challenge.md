@@ -365,4 +365,4 @@ Reuse the existing CSS classes (`panel`, `tabs`, `cards`, `pager`, `history`, `r
 ## Testing
 
 - Unit tests live in `test/` and run with `npm test` (`node --test`). Pure functions such as task selection, period maths and evidence matching should be tested there. The scoped-DB guard has its own test.
-- With `.dev.vars` containing `DEV_MODE=1`, `npx wrangler dev` accepts an `x-dev-user: someone@cs.washington.edu` header (or the dev bar in the page) to act as different users. That's how the end-to-end checks for both modules were run.
+- With `.dev.vars` containing `DEV_MODE=1`, `npx wrangler dev` accepts an `x-dev-user: someone@cs.washington.edu` header (or the dev bar in the page) to act as different users, and `x-dev-user: signed-out` (the header's "Sign out") to see the site signed out. That's how the end-to-end checks for both modules were run.

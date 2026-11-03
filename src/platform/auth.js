@@ -3,6 +3,8 @@ import { googleEnabled, sessionIdentity } from "./google-auth.js";
 import { emailHash } from "./vault.js";
 
 const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+// Dev mode's "signed out": an x-dev-user value that means nobody (DEV_SIGNED_OUT in public/lib.js).
+const DEV_SIGNED_OUT = "signed-out";
 
 // DEV_MODE lets a request pick its own identity and enables fake data sources, so it only
 // counts for requests to a local host. Anywhere else the env is returned with DEV_MODE
@@ -15,7 +17,8 @@ export function effectiveEnv(request, env) {
 }
 
 // Who is making the request, in order:
-// 1. DEV_MODE (local only, see effectiveEnv) and an x-dev-user header: that email.
+// 1. DEV_MODE (local only, see effectiveEnv) and an x-dev-user header: that email, or nobody for
+//    DEV_SIGNED_OUT.
 // 2. Google sign-in configured: the session cookie's email, or nobody.
 // 3. Cloudflare Access with ACCESS_TEAM_DOMAIN and ACCESS_AUD: the verified Access JWT.
 // 4. DEV_MODE: DEV_USER_EMAIL.
@@ -26,7 +29,9 @@ export async function identify(request, env, now = Date.now()) {
   let email;
   let banned = null;
   const devOverride = env.DEV_MODE === "1" && request.headers.get("x-dev-user");
-  if (devOverride) {
+  if (devOverride === DEV_SIGNED_OUT) {
+    email = null;
+  } else if (devOverride) {
     email = devOverride;
   } else if (googleEnabled(env)) {
     const session = await sessionIdentity(request, env, now);

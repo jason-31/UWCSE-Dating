@@ -31,6 +31,8 @@ function appendChildren(el, children) {
 }
 
 const DEV_USER_KEY = "uwcse-dev-user";
+// Dev mode's "signed out": acting as nobody (src/platform/auth.js), to see the site as a visitor.
+export const DEV_SIGNED_OUT = "signed-out";
 
 export function devUser() {
   try {

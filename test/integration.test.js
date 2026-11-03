@@ -383,6 +383,16 @@ test("outside local development, nothing runs without a valid DATA_KEY", async (
   await assertMayRegister({ ...env, DATA_KEY: btoa("k".repeat(32)) }, "x@cs.washington.edu", Date.now());
 });
 
+test("dev mode can act as nobody, to see the site signed out", async () => {
+  const me = async (env, devUser) => {
+    const headers = { "x-uwcse-csrf": "1", ...(devUser && { "x-dev-user": devUser }) };
+    return (await worker.fetch(new Request("http://localhost/api/me", { headers }), env)).json();
+  };
+  const env = createEnv({ DEV_USER_EMAIL: "dev@cs.washington.edu" });
+  assert.equal((await me(env)).signed_in, true);
+  assert.equal((await me(env, "signed-out")).signed_in, false);
+});
+
 test("rate limits: 429 when a limiter says no, no effect without bindings", async () => {
   const deny = { limit: async () => ({ success: false }) };
   const allow = { limit: async () => ({ success: true }) };
