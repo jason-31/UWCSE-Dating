@@ -35,7 +35,7 @@
 		{
 			"binding": "DB",
 			"database_name": "uwcse-date-db",
-			"database_id": "32ac531f-5fa5-4e68-ba8d-7674ecea7ba2",
+			"database_id": "6fd62566-fe98-4218-a862-63b7e2c77701",
 			"migrations_dir": "migrations"
 		}
 	],

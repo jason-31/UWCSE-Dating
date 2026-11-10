@@ -31,8 +31,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # In a new account the Worker does not exist yet (API error 10007): then there is no key, and
-      # wrangler secret put below creates the Worker with DATA_KEY as its first secret.
+      # Wrangler reports a missing Worker by name. In that case, secret put creates it.
       - name: Refuse if DATA_KEY already exists
         run: |
           if npx wrangler secret list --format json > "$RUNNER_TEMP/secrets.json" 2> "$RUNNER_TEMP/secrets.err"; then
@@ -43,7 +42,7 @@ jobs:
                 process.exit(1);
               }
             ' "$RUNNER_TEMP/secrets.json"
-          elif grep -q "10007" "$RUNNER_TEMP/secrets.err" "$RUNNER_TEMP/secrets.json"; then
+          elif grep -Eq 'Worker "[^"]+" not found\.' "$RUNNER_TEMP/secrets.err"; then
             echo "The Worker does not exist yet; DATA_KEY will be its first secret."
           else
             cat "$RUNNER_TEMP/secrets.err"
