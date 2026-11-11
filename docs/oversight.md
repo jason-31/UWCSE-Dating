@@ -79,7 +79,7 @@ Planned work, roughly in order. Each item, when done, should link the code that 
   - Sessions seal the email and expiry to the token hash, so a session row written without `DATA_KEY` signs no one in (`test/integration.test.js`, "a session row written without DATA_KEY signs no one in").
   - Bans are applied by the Worker from queued requests (`src/platform/bans.js`, `scripts/ban.mjs`), since only it can compute the email hash.
   - `test/integration.test.js` ("the database and R2 hold no personal data in the clear") dumps every table and R2 object after a full workflow and finds none of the personal values.
-- [ ] **Signed avatar URLs (rule 7):** card and profile avatar URLs carry `exp` and an HMAC `sig`; the avatar endpoint rejects unsigned or expired URLs.
+- [x] **Signed avatar URLs (rule 7):** emitted upload URLs carry a viewer-bound HMAC signature and a 15-minute expiry. Each read also checks current open-list membership and profile visibility. Owners can preview their own uploads before registration. Responses use `private, no-store`; expired lazy-loaded images renew their URL through the same authorization checks.
 - [x] **Development-mode guard (rule 4):** `DEV_MODE` only counts for requests to `localhost`, `127.0.0.1` or `[::1]` (`effectiveEnv` in `src/platform/auth.js`); identity is never taken from an unverified header.
 - [x] **Public repository (rule 1):** https://github.com/jason-31/UWCSE-Dating, licensed AGPL-3.0.
 - [ ] **CI deployment workflow (rule 2):** `.github/workflows/deploy.yml` deploys on push to `main` only, from a GitHub environment restricted to `main`, with a token scoped as in [deploy.md](deploy.md). Done once that environment is set up, `main` is protected and nobody keeps a local `wrangler` login.

@@ -15,6 +15,21 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
+// Lazy-loaded cards can outlive their signed avatar URLs. Renewal rechecks visibility.
+export function avatarImage(src, attrs = {}) {
+  const image = h("img", { alt: "", ...attrs, src });
+  const uploaded = /^\/api\/avatars\/([0-9a-f]{32})(?:\?|$)/.exec(src);
+  if (uploaded) image.addEventListener("error", async () => {
+    try {
+      const result = await api(`/api/avatars/${uploaded[1]}/url`);
+      image.src = result.url;
+    } catch {
+      image.hidden = true;
+    }
+  }, { once: true });
+  return image;
+}
+
 // Like el.replaceChildren(), but skips null/false/undefined the way h() does, so conditional
 // children (cond && node) don't render as the text "false" or "null".
 export function fill(el, ...children) {

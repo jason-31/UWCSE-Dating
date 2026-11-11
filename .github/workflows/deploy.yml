@@ -7,15 +7,12 @@ name: Deploy
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-# One deployment at a time, in order.
-concurrency:
-  group: production
-  cancel-in-progress: false
 
 jobs:
   test:
@@ -30,7 +27,11 @@ jobs:
       - run: npm test
 
   deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: test
+    concurrency:
+      group: production
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: production
     env:

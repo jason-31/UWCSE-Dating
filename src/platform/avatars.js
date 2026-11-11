@@ -21,6 +21,7 @@ export const AVATAR_UPLOAD_ATTEMPTS = 5;
 export const AVATAR_UPLOAD_WINDOW_DAYS = 30;
 const UPLOAD_WINDOW_MS = AVATAR_UPLOAD_WINDOW_DAYS * 86400_000;
 const UPLOAD_PURPOSE = "avatar-upload";
+export const AVATAR_URL_TTL_SECONDS = 15 * 60;
 
 const UPLOAD_RE = /^upload:([0-9a-f]{32})$/;
 
@@ -35,6 +36,29 @@ export function isUploadRef(avatar) {
 export function avatarUrl(avatar) {
   const id = uploadId(avatar);
   return id ? `/api/avatars/${id}` : `/avatars/${avatar}.png`;
+}
+
+export async function signedAvatarUrl(env, avatar, email, now = Date.now()) {
+  const id = uploadId(avatar);
+  if (!id) return avatarUrl(avatar);
+  const exp = Math.floor(now / 1000) + AVATAR_URL_TTL_SECONDS;
+  const sig = await vault(env).lookup("avatar-url", JSON.stringify([id, email, exp]));
+  return `${avatarUrl(avatar)}?exp=${exp}&sig=${sig}`;
+}
+
+export async function validAvatarUrl(env, id, email, params, now) {
+  const exp = Number(params.get("exp"));
+  const seconds = Math.floor(now / 1000);
+  if (!Number.isSafeInteger(exp) || exp <= seconds || exp > seconds + AVATAR_URL_TTL_SECONDS) return false;
+  return vault(env).verifyLookup("avatar-url", JSON.stringify([id, email, exp]), params.get("sig") ?? "");
+}
+
+// Sign only the cards selected for a response, after filtering and pagination.
+export async function signAvatarCards(env, email, cards, now) {
+  return Promise.all(cards.map(async (card) => {
+    const match = /^\/api\/avatars\/([0-9a-f]{32})$/.exec(card.avatar_url);
+    return match ? { ...card, avatar_url: await signedAvatarUrl(env, `upload:${match[1]}`, email, now) } : card;
+  }));
 }
 
 // Identify the image format from its first bytes; the declared content type is not trusted.
@@ -112,11 +136,11 @@ async function inUse(db, owner) {
 
 // This email's latest upload, which is kept even while the profile uses something else, so that
 // switching back to it costs no upload. Null if there is none.
-export async function latestUpload(env, email) {
+export async function latestUpload(env, email, now = Date.now()) {
   const row = await env.DB.prepare("SELECT id FROM avatars WHERE owner_hash = ? ORDER BY created_at DESC, rowid DESC LIMIT 1")
     .bind(await emailHash(env, email))
     .first();
-  return row ? { avatar: `upload:${row.id}`, url: avatarUrl(`upload:${row.id}`) } : null;
+  return row ? { avatar: `upload:${row.id}`, url: await signedAvatarUrl(env, `upload:${row.id}`, email, now) } : null;
 }
 
 // Deletes this email's uploads except the one its profile uses, the latest one, and any listed in
@@ -247,7 +271,7 @@ export async function uploadAvatar(env, request, email, now) {
   // Keep at most the avatar in use plus this new one.
   await pruneAvatars(env, email, { keep: [id] });
   const avatar = `upload:${id}`;
-  return { avatar, url: avatarUrl(avatar) };
+  return { avatar, url: await signedAvatarUrl(env, avatar, email, now) };
 }
 
 function tooLarge() {
@@ -262,8 +286,7 @@ export async function assertAvatarOwned(env, email, avatar) {
   if (!row) throw new HttpError(400, "invalid_request", L("头像不存在，请重新上传", "That avatar no longer exists; please upload again"));
 }
 
-// Upload ids are unguessable and only reach people allowed to see the card, so any signed-in
-// visitor may fetch one; the response is never shared between users by caches.
+// The caller checks the viewer-bound signature and current visibility before reading R2.
 export async function serveAvatar(env, id) {
   if (!/^[0-9a-f]{32}$/.test(id)) throw new HttpError(404, "not_found", L("头像不存在", "Avatar not found"));
   const obj = await env.BUCKET.get(`avatars/${id}`);
@@ -278,7 +301,7 @@ export async function serveAvatar(env, id) {
   return new Response(bytes, {
     headers: {
       "content-type": obj.customMetadata?.contentType || "application/octet-stream",
-      "cache-control": "private, max-age=31536000, immutable",
+      "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
       "content-security-policy": "default-src 'none'",
     },

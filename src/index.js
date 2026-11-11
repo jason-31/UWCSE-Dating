@@ -23,7 +23,7 @@ import { assertMayRegister, tombstoneStatements } from "./platform/deletions.js"
 import { pruneExpired } from "./platform/retention.js";
 import { isBanned, applyBanRequests } from "./platform/bans.js";
 import { vault, emailHash } from "./platform/vault.js";
-import { uploadAvatar, serveAvatar, assertAvatarOwned, pruneAvatars, deleteAllAvatars, avatarUrl, latestUpload } from "./platform/avatars.js";
+import { uploadAvatar, serveAvatar, assertAvatarOwned, pruneAvatars, deleteAllAvatars, signedAvatarUrl, validAvatarUrl, signAvatarCards, latestUpload } from "./platform/avatars.js";
 import { SITE } from "./site.config.js";
 import { CHALLENGES } from "./challenges.config.js";
 import leetcode from "./modules/leetcode/index.js";
@@ -120,7 +120,7 @@ function profileConfig(env) {
 // yields completeness and filtered cards (one service per request, shared by every module; cards
 // use what each person seeks in this challenge), the versioned cache for its member lists, and
 // sealing under purposes prefixed with its id.
-function moduleContext(entry, env, { userId, now, lang, profiles }) {
+function moduleContext(entry, env, { userId, now, lang, profiles, email }) {
   const { module, config } = entry;
   return {
     challengeId: config.challenge_id,
@@ -132,6 +132,7 @@ function moduleContext(entry, env, { userId, now, lang, profiles }) {
     profiles: profiles && {
       status: (id) => profiles.status(id),
       cards: (viewerId, ownerIds) => profiles.cards(viewerId, ownerIds, config.challenge_id),
+      signAvatars: (cards) => signAvatarCards(env, email, cards, now),
     },
     lists: listCache(env.DB, config.challenge_id),
     vault: moduleVault(env, config.challenge_id),
@@ -151,14 +152,14 @@ function moduleVault(env, challengeId) {
   };
 }
 
-function publicProfile(p) {
+async function publicProfile(p, env, email, now) {
   return (
     p && {
       email: p.email,
       nickname: p.nickname,
       gender: p.gender,
       avatar: p.avatar,
-      avatar_url: avatarUrl(p.avatar),
+      avatar_url: await signedAvatarUrl(env, p.avatar, email, now),
       relations: p.relations,
       relation_filters: p.relation_filters,
       relation_notes: p.relation_notes,
@@ -199,11 +200,38 @@ async function handleApi(request, env, url, lang) {
   // Google sessions report the ban with the session lookup; other identity sources need a query.
   const banned = knownBan ?? (await isBanned(env, email));
 
-  // Uploaded avatars are the most frequent request (one per card image) and need no user row,
-  // so they are answered before the user lookup.
-  if (request.method === "GET" && parts[1] === "avatars" && parts.length === 3) {
+  // Owners may preview uploads before registering. Other viewers must still be able to see
+  // the owner's current card in an open list, even when holding a previously signed URL.
+  if (request.method === "GET" && parts[1] === "avatars" && (parts.length === 3 || (parts.length === 4 && parts[3] === "url"))) {
     if (banned) throw new HttpError(403, "banned", L("此账号已被封禁", "This account has been banned"));
-    return serveAvatar(env, parts[2]);
+    const id = parts[2];
+    const denied = () => new HttpError(404, "not_found", L("头像不存在", "Avatar not found"));
+    if (!/^[0-9a-f]{32}$/.test(id)) throw denied();
+    if (parts.length === 3 && !(await validAvatarUrl(env, id, email, url.searchParams, now))) throw denied();
+    const owner = await env.DB.prepare(
+      "SELECT a.owner_hash, u.id AS user_id FROM avatars a LEFT JOIN users u ON u.email_hash = a.owner_hash WHERE a.id = ?",
+    ).bind(id).first();
+    if (!owner) throw denied();
+    let allowed = owner.owner_hash === await emailHash(env, email);
+    if (!allowed && owner.user_id) {
+      const viewerId = await findUser(env, email);
+      if (viewerId) {
+        for (const entry of challenges.values()) {
+          if (!entry.config.enabled || !entry.module.browsableUserIds) continue;
+          const ctx = moduleContext(entry, env, { userId: viewerId, now, lang, profiles, email });
+          const ids = await entry.module.browsableUserIds(ctx);
+          if (!ids.includes(owner.user_id)) continue;
+          const card = (await profiles.cards(viewerId, [owner.user_id], entry.config.challenge_id)).get(owner.user_id);
+          if (card?.avatar_url === `/api/avatars/${id}`) {
+            allowed = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!allowed) throw denied();
+    if (parts.length === 4) return json({ ok: true, url: await signedAvatarUrl(env, `upload:${id}`, email, now) });
+    return serveAvatar(env, id);
   }
 
   const userId = await findUser(env, email);
@@ -266,7 +294,7 @@ async function handleApi(request, env, url, lang) {
       profilesChangedStatement(env.DB),
     ]);
     await pruneAvatars(env, email);
-    return json({ ok: true, profile: publicProfile(await getProfile(env, id)) });
+    return json({ ok: true, profile: await publicProfile(await getProfile(env, id), env, email, now) });
   }
 
   // Deletes the account: every challenge purges its own data, then avatars, then the profile and
@@ -302,10 +330,10 @@ async function handleApi(request, env, url, lang) {
     return json({
       ok: true,
       schema: localize(profileSchema(profileCfg), lang),
-      profile: publicProfile(p),
+      profile: await publicProfile(p, env, email, now),
       missing_fields: missingRequired(p, profileCfg),
       locked_until: lockedUntil(p, profileCfg),
-      latest_upload: await latestUpload(env, email), // offered in the avatar picker even when unused
+      latest_upload: await latestUpload(env, email, now), // offered in the avatar picker even when unused
     });
   }
 
@@ -316,7 +344,7 @@ async function handleApi(request, env, url, lang) {
     checkLockedChanges(current, p, profileCfg, now);
     await env.DB.batch([await upsertProfileStatement(env, userId, email, p, current, profileCfg, now), profilesChangedStatement(env.DB)]);
     await pruneAvatars(env, email); // drop an upload the profile no longer uses
-    return json({ ok: true, profile: publicProfile(await getProfile(env, userId)) });
+    return json({ ok: true, profile: await publicProfile(await getProfile(env, userId), env, email, now) });
   }
 
   // Which of their profile's relations the user seeks in one challenge. GET returns the choice
@@ -379,23 +407,23 @@ async function handleApi(request, env, url, lang) {
       if (!relations.includes(relation)) throw new HttpError(400, "invalid_request", L("关系参数不合法", "Invalid relation"));
       const offset = Math.max(0, parseInt(url.searchParams.get("offset") || "0", 10) || 0);
       const group = inRelation(relation);
-      return json({ ok: true, relation, total: group.length, offset, people: group.slice(offset, offset + PEOPLE_PAGE_SIZE) });
+      return json({ ok: true, relation, total: group.length, offset, people: await signAvatarCards(env, email, group.slice(offset, offset + PEOPLE_PAGE_SIZE), now) });
     }
     return json({
       ok: true,
       viewer_relations: relations,
       page_size: PEOPLE_PAGE_SIZE,
-      sections: relations.map((rel) => {
+      sections: await Promise.all(relations.map(async (rel) => {
         const group = inRelation(rel);
-        return { relation: rel, total: group.length, people: group.slice(0, PEOPLE_PAGE_SIZE) };
-      }),
+        return { relation: rel, total: group.length, people: await signAvatarCards(env, email, group.slice(0, PEOPLE_PAGE_SIZE), now) };
+      })),
     });
   }
 
   if (parts[1] === "challenges" && parts.length >= 3) {
     const entry = challenges.get(parts[2]);
     if (!entry || !entry.config.enabled) throw new HttpError(404, "challenge_not_found", L("该挑战不存在或未启用", "This challenge does not exist or is disabled"));
-    return entry.module.handleRequest(request, moduleContext(entry, env, { userId, now, lang, profiles }), parts.slice(3));
+    return entry.module.handleRequest(request, moduleContext(entry, env, { userId, now, lang, profiles, email }), parts.slice(3));
   }
 
   throw new HttpError(404, "not_found", L("接口不存在", "Not found"));

@@ -271,7 +271,7 @@ async function getMembers(ctx, periodId, url) {
     total: visible.length,
     page,
     page_size: pageSize,
-    members: visible.slice((page - 1) * pageSize, page * pageSize),
+    members: await ctx.profiles.signAvatars(visible.slice((page - 1) * pageSize, page * pageSize)),
   });
 }
 
