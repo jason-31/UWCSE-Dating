@@ -49,15 +49,15 @@ jobs:
             echo "::error::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the production environment (docs/deploy.md)."
             exit 1
           fi
-      # The code stores personal data sealed with DATA_KEY. Without it, migrating and deploying
-      # would leave a site that cannot serve anyone, so stop before touching anything.
-      - name: Require DATA_KEY
+      # Require the encryption and Google sign-in secrets before changing production.
+      - name: Require Worker secrets
         run: |
           npx wrangler secret list --format json > "$RUNNER_TEMP/secrets.json"
           node -e '
             const names = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map((s) => s.name);
-            if (!names.includes("DATA_KEY")) {
-              console.log("::error::The Worker has no DATA_KEY. Run the Provision DATA_KEY workflow first.");
+            const missing = ["DATA_KEY", "GOOGLE_CLIENT_SECRET"].filter((name) => !names.includes(name));
+            if (missing.length) {
+              console.log(`::error::Missing Worker secrets: ${missing.join(", ")}. Run the matching provisioning workflow first.`);
               process.exit(1);
             }
           ' "$RUNNER_TEMP/secrets.json"

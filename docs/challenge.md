@@ -76,7 +76,7 @@ return L(`每天 0 点（${tz}）刷新`, `Refreshes daily at midnight (${tz})`)
 The platform routes every request under `/api/challenges/{challenge_id}/…` here, after it has:
 
 - checked CSRF (non-GET requests need the header `x-uwcse-csrf: 1` and a same-origin `Origin`),
-- authenticated the user through Cloudflare Access,
+- authenticated the user through the site's Google sign-in session,
 - confirmed the user is registered,
 - confirmed the challenge exists and is `enabled`.
 

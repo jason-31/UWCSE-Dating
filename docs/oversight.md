@@ -17,7 +17,7 @@ This goal is deliberately narrower than "operators can see nothing". A matching 
 1. **Open source.** All code that runs in production is in the public repository.
 2. **CI-only deployment.** Production is deployed only by the public CI workflow, from the protected `main` branch. No person holds a Cloudflare API token that can deploy, read D1 or read R2.
 3. **Configuration as code.** Environment variables, bindings, routes and Cloudflare Access settings that affect who can sign in or what code runs are declared in the repository. Changes made in the dashboard instead must appear in the published audit log (rule 9).
-4. **Development mode never runs in production.** `DEV_MODE`, which lets a request choose its own identity, is honoured only for `localhost` requests, and never when Access JWT verification is configured.
+4. **Development mode never runs in production.** `DEV_MODE`, which lets a request choose its own identity, is honoured only for `localhost` requests.
 
 ### Data
 
