@@ -181,7 +181,7 @@ async function handleApi(request, env, url, lang) {
   if (request.method === "POST" && url.pathname === "/api/logout") return logout(request, env);
   const parts = url.pathname.split("/").filter(Boolean); // ["api", ...]
   const route = `${request.method} /${parts.slice(1).join("/")}`;
-  const auth = googleEnabled(env) ? "google" : "access";
+  const auth = "google";
   const devMode = env.DEV_MODE === "1";
   let email, knownBan;
   try {

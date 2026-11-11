@@ -43,11 +43,6 @@ function renderBanned() {
 
 // Signed out (Google sign-in): the About page with a sign-in button, plus why a sign-in failed.
 function renderSignedOut() {
-  if (me.auth !== "google" && !me.dev_mode) {
-    // Behind Cloudflare Access a missing identity means Access isn't in front of this request.
-    app.replaceChildren(h("div", { class: "panel" }, h("h2", {}, t("cannot_sign_in"))));
-    return;
-  }
   const err = new URLSearchParams(location.search).get("login_error");
   if (err) history.replaceState(null, "", location.pathname + location.hash);
   const key =
@@ -77,9 +72,9 @@ function renderHeader() {
     h("a", { href: "#/privacy" }, t("privacy")),
     me.registered && !me.banned ? h("a", { href: "#/profile" }, t("my_profile")) : "",
     me.signed_in && h("span", { class: "muted" }, me.email),
-    me.signed_in && (me.auth === "google" || me.dev_mode) && signOut,
+    me.signed_in && signOut,
     // Where people look for it first; the page below has the main button too.
-    !me.signed_in && (me.auth === "google" || me.dev_mode) && h("a", { class: "header-sign-in", href: "/auth/login" }, t("sign_in")),
+    !me.signed_in && h("a", { class: "header-sign-in", href: "/auth/login" }, t("sign_in")),
   );
   renderLangSwitch();
 }
@@ -113,7 +108,7 @@ function renderDevBar() {
   });
 }
 
-// Cloudflare Access proved the email; unknown emails register here by creating the site-wide
+// Google sign-in proved the email; unknown emails register here by creating the site-wide
 // profile. The email itself is fixed to the login email.
 async function renderRegister() {
   if (!me.email_allowed) {

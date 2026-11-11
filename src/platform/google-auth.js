@@ -2,8 +2,7 @@ import { vault, emailHash } from "./vault.js";
 
 // Sign in with Google (OpenID Connect, authorization-code flow with PKCE), restricted to the
 // Google Workspace domains in ALLOWED_EMAIL_DOMAINS via the `hd` claim. Enabled when
-// GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set; otherwise identity falls back to
-// Cloudflare Access (see auth.js).
+// GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set.
 //
 // A login attempt is kept only in a short-lived signed cookie, so starting a login costs no
 // database work (anyone on the internet can request /auth/login). A successful login creates a

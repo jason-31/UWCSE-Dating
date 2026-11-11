@@ -330,6 +330,11 @@ test("identity never comes from an unverified header; DEV_MODE only counts on lo
   const prod = req("https://uwcse.date/api/me", spoof);
   await assert.rejects(identify(prod, effectiveEnv(prod, {})), (e) => e.code === "auth_not_configured");
 
+  // Legacy Access configuration cannot supply the site's identity.
+  const accessOnly = { ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com", ACCESS_AUD: "legacy-app" };
+  const accessRequest = req("https://uwcse.date/api/me", { ...spoof, "cf-access-jwt-assertion": "ignored" });
+  await assert.rejects(identify(accessRequest, accessOnly), (e) => e.code === "auth_not_configured");
+
   // A stray DEV_MODE=1 in production is ignored, so x-dev-user can't pick an identity.
   const devEnv = { DEV_MODE: "1", DEV_USER_EMAIL: "dev@cs.washington.edu" };
   assert.equal(effectiveEnv(prod, devEnv).DEV_MODE, undefined);

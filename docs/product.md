@@ -6,7 +6,7 @@ UWCSE.date is an unofficial site run independently by an individual; it is not a
 
 ## Accounts
 
-- **Sign-in** is with Google, limited to Workspace accounts of the configured domains (`cs.washington.edu`); the `hd` claim is checked, so personal Google accounts that use a school address are refused. (Cloudflare Access can be used instead when Google sign-in is not configured.)
+- **Sign-in** is with Google, limited to Workspace accounts of the configured domains (`cs.washington.edu`); the `hd` claim is checked, so personal Google accounts that use a school address are refused.
 - **Registration.** A signed-in email that has not registered sees the About page, then registers by filling in the profile and accepting the site rules. The account's email is always the sign-in email; it cannot be chosen.
 - **Deleting the account** removes every challenge's data, uploaded avatars, the profile, the identity and all sessions. If a profile change lock is still running, the same email cannot register again until it would have expired, so deleting and re-registering cannot reset the locks.
 - **Bans** are permanent and keyed by email, so deleting the account does not lift them. A banned person can only sign out and delete their data, and their card disappears from every list at once.
