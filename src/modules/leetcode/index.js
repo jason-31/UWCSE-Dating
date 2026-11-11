@@ -793,7 +793,7 @@ async function getMembers(ctx, periodId, url) {
     total: visible.length,
     page,
     page_size: pageSize,
-    members: slice.map((v) => v.card), // user_id never leaves the server
+    members: await ctx.profiles.signAvatars(slice.map((v) => v.card)), // user_id never leaves the server
   });
 }
 

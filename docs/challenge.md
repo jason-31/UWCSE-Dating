@@ -183,7 +183,7 @@ This guard keeps trusted code inside its namespace by construction. It is not a 
 
 ### `ctx.profiles` (profile service)
 
-Modules never read or store personal information such as nickname, contacts or relations. They only get these two methods:
+Modules use the profile service to read filtered cards:
 
 ```js
 await ctx.profiles.status(userId)
@@ -191,6 +191,9 @@ await ctx.profiles.status(userId)
 
 await ctx.profiles.cards(viewerId, ownerIds)
 // → Map<ownerId, Card | null>   (null = the two share no relation; never show that person)
+
+await ctx.profiles.signAvatars(cards)
+// → Card[] with viewer-bound avatar URLs; call after pagination, before replying.
 ```
 
 `Card` has already been filtered by shared relations (what each person seeks in this challenge: their profile's relations, narrowed by their choice for this challenge, which the platform stores and applies), both people's per-relation filters (two-way, on gender and program), and the owner's per-relation visibility of contact fields. A card is `null` when no relation matches both ways:
@@ -287,8 +290,8 @@ async function getMembers(ctx, periodId, url) {
   //    through the profile service:
   const cards = await ctx.profiles.cards(ctx.userId, rows.map((r) => r.user_id));
   const visible = rows.flatMap((r) => (cards.get(r.user_id) ? [{ member_id: r.member_id, ...cards.get(r.user_id) }] : []));
-  // 4. Paginate.
-  return reply(ctx, { ok: true, period_id, total: visible.length, page, page_size, members: visible.slice(…) });
+  // 4. Paginate and sign the emitted avatar URLs.
+  return reply(ctx, { ok: true, period_id, total: visible.length, page, page_size, members: await ctx.profiles.signAvatars(visible.slice(…)) });
 }
 ```
 

@@ -1,4 +1,4 @@
-import { h, fill, api, devUser, setDevUser, DEV_SIGNED_OUT, toast } from "/lib.js";
+import { h, fill, api, devUser, setDevUser, DEV_SIGNED_OUT, toast, avatarImage } from "/lib.js";
 import { openCard } from "/card.js";
 import { profileForm } from "/profile.js";
 import { aboutPage } from "/about.js";
@@ -207,7 +207,7 @@ function personItem(m) {
     h(
       "button",
       { type: "button", class: "person", onclick: () => openCard(m) },
-      h("img", { loading: "lazy", decoding: "async", src: m.avatar_url, alt: "" }),
+      avatarImage(m.avatar_url, { loading: "lazy", decoding: "async" }),
       h("span", { class: "name" }, m.nickname),
     ),
   );

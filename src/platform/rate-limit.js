@@ -30,7 +30,7 @@ export async function enforceRateLimit(limiter, key) {
 
 // Which limiter an authenticated /api request counts against.
 export function apiLimiter(env, method, parts) {
-  if (method === "GET" && parts[1] === "avatars" && parts.length === 3) return env.RL_AVATAR;
+  if (method === "GET" && parts[1] === "avatars") return env.RL_AVATAR;
   if (method === "GET" && parts.length === 2 && parts[1] === "people") return env.RL_LIST;
   // /api/challenges/<id>/periods/<period>/members
   if (method === "GET" && parts.length === 6 && parts[1] === "challenges" && parts[3] === "periods" && parts[5] === "members") {

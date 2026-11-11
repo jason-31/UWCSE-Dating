@@ -55,7 +55,7 @@ async function deriveKeys(bytes) {
     );
   return {
     seal: await derive("uwcse.date seal v1", { name: "AES-GCM", length: 256 }, ["encrypt", "decrypt"]),
-    lookup: await derive("uwcse.date lookup v1", { name: "HMAC", hash: "SHA-256", length: 256 }, ["sign"]),
+    lookup: await derive("uwcse.date lookup v1", { name: "HMAC", hash: "SHA-256", length: 256 }, ["sign", "verify"]),
   };
 }
 
@@ -133,6 +133,12 @@ export function vault(env) {
       const { lookup } = await keys(env);
       const sig = new Uint8Array(await crypto.subtle.sign("HMAC", lookup, utf8.encode(`${purpose}|${text}`)));
       return Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");
+    },
+    async verifyLookup(purpose, text, signature) {
+      if (!/^[0-9a-f]{64}$/.test(signature)) return false;
+      const { lookup } = await keys(env);
+      const bytes = Uint8Array.from(signature.match(/../g), (pair) => parseInt(pair, 16));
+      return crypto.subtle.verify("HMAC", lookup, bytes, utf8.encode(`${purpose}|${text}`));
     },
   };
 }

@@ -1,4 +1,4 @@
-import { h, fill, apiUpload, toast } from "/lib.js";
+import { h, fill, apiUpload, toast, avatarImage } from "/lib.js";
 import { t, RELATIONS, FIELDS, PROGRAMS, GENDERS, fmtDateTime } from "/i18n.js";
 import { textWeight } from "/text-weight.js";
 import { openCard } from "/card.js";
@@ -85,7 +85,7 @@ export function profileForm({ schema, profile, email, title, intro, submitLabel,
               renderAvatars();
             },
           },
-          h("img", { src: a.url, alt: "" }),
+          avatarImage(a.url),
         ),
       ),
       uploadBtn,

@@ -187,8 +187,9 @@ test("check-in list and home page reflect every write on the next request", asyn
 test("LeetCode list follows verification, leaving and withdrawal", async () => {
   const env = createEnv();
   const base = "/api/challenges/leetcode-daily";
+  const uploaded = await upload(env, "b");
   for (const u of ["a", "b"]) {
-    await register(env, u);
+    await register(env, u, { avatar: u === "b" ? uploaded.data.avatar : "female" });
     assert.equal((await call(env, u, "POST", `${base}/enrollment`, { accept_rules: true, join_mode: "always" })).status, 200);
     assert.equal((await call(env, u, "POST", `${base}/binding/start`, { username: `${u}_ac` })).status, 200);
     assert.equal((await call(env, u, "POST", `${base}/binding/verify`, {})).data.result, "verified");
@@ -198,8 +199,11 @@ test("LeetCode list follows verification, leaving and withdrawal", async () => {
   assert.equal((await members("a")).total, 0);
   assert.equal((await call(env, "b", "POST", `${base}/periods/${today()}/verify`, {})).data.result, "verified");
   assert.deepEqual(emails((await members("a")).members), ["b"]);
+  const avatar = (await members("a")).members[0].avatar_url;
+  assert.equal((await call(env, "a", "GET", avatar)).status, 200);
   await call(env, "b", "DELETE", `${base}/periods/${today()}/membership`);
   assert.equal((await members("a")).total, 0);
+  assert.equal((await call(env, "a", "GET", avatar)).status, 404);
   await call(env, "b", "POST", `${base}/periods/${today()}/membership`, { confirm: true });
   assert.equal((await members("a")).total, 1);
   await call(env, "b", "DELETE", `${base}/enrollment`);
@@ -597,7 +601,7 @@ test("the database and R2 hold no personal data in the clear", async () => {
   // Everything still works through the API.
   const me = (await call(env, "zz-secret-person", "GET", "/api/profile")).data.profile;
   assert.equal(me.wechat, "wx-SECRET");
-  assert.equal((await call(env, "zz-secret-person", "GET", `/api/avatars/${up.data.avatar.slice(7)}`)).status, 200);
+  assert.equal((await call(env, "zz-secret-person", "GET", up.data.url)).status, 200);
   assert.equal((await call(env, "zz-secret-person", "GET", `${base}/enrollment`)).data.binding.username, "lcsecret_ac");
 });
 
@@ -683,6 +687,85 @@ async function upload(env, user, bytes = png256()) {
   return { status: res.status, data: await res.json() };
 }
 
+test("avatar URLs expire, reject tampering and other viewers, and keep owner previews private", async (t) => {
+  let now = Date.UTC(2026, 10, 11, 18);
+  t.mock.method(Date, "now", () => now);
+  const env = createEnv();
+  const uploaded = await upload(env, "owner");
+  const url = uploaded.data.url;
+  const parsed = new URL(url, "http://localhost");
+  const renewal = `${parsed.pathname}/url`;
+  const own = await call(env, "owner", "GET", url);
+  assert.equal(own.status, 200);
+  assert.equal(own.headers.get("cache-control"), "private, no-store");
+  assert.equal(await findUser(env, email("owner")), null);
+  assert.equal((await call(env, "other", "GET", url)).status, 404);
+  assert.equal((await call(env, "other", "GET", renewal)).status, 404);
+  assert.equal((await call(env, "owner", "GET", parsed.pathname)).status, 404);
+  parsed.searchParams.set("sig", "0".repeat(64));
+  assert.equal((await call(env, "owner", "GET", parsed.pathname + parsed.search)).status, 404);
+  parsed.searchParams.set("exp", String(Number(parsed.searchParams.get("exp")) + 3600));
+  assert.equal((await call(env, "owner", "GET", parsed.pathname + parsed.search)).status, 404);
+  now += 16 * 60_000;
+  assert.equal((await call(env, "owner", "GET", url)).status, 404);
+  const refreshed = await call(env, "owner", "GET", renewal);
+  assert.equal(refreshed.status, 200);
+  assert.equal((await call(env, "owner", "GET", refreshed.data.url)).status, 200);
+  await call(env, "owner", "DELETE", "/api/account");
+  assert.equal((await call(env, "owner", "GET", refreshed.data.url)).status, 404);
+});
+
+test("avatar visibility follows current cards, list membership, bans and the owner's current avatar", async () => {
+  const env = createEnv();
+  const uploaded = await upload(env, "owner");
+  await register(env, "owner", { avatar: uploaded.data.avatar });
+  await register(env, "viewer");
+  await register(env, "unrelated", { relations: ["STUDY"] });
+  await checkin(env, "owner");
+  await checkin(env, "viewer");
+  await checkin(env, "unrelated");
+  const url = (await ciMembers(env, "viewer")).members[0].avatar_url;
+  const path = new URL(url, "http://localhost").pathname;
+  assert.equal((await call(env, "viewer", "GET", url)).status, 200);
+  assert.equal((await call(env, "unrelated", "GET", url)).status, 404);
+  assert.equal((await call(env, "unrelated", "GET", path + "/url")).status, 404);
+  assert.equal((await call(env, "unregistered", "GET", path + "/url")).status, 404);
+  const home = (await call(env, "viewer", "GET", "/api/people")).data;
+  assert.equal((await call(env, "viewer", "GET", home.sections[0].people[0].avatar_url)).status, 200);
+
+  await editProfile(env, "owner", (p) => { p.relations = ["STUDY"]; });
+  assert.equal((await call(env, "viewer", "GET", url)).status, 404);
+  assert.equal((await call(env, "viewer", "GET", path + "/url")).status, 404);
+  await editProfile(env, "owner", (p) => { p.relations = ["FRIENDSHIP"]; });
+  assert.equal((await call(env, "viewer", "GET", url)).status, 200);
+  await call(env, "owner", "DELETE", `/api/challenges/daily-checkin/periods/${today()}/membership`);
+  assert.equal((await call(env, "viewer", "GET", url)).status, 404);
+  await call(env, "owner", "POST", `/api/challenges/daily-checkin/periods/${today()}/membership`, {});
+  assert.equal((await call(env, "viewer", "GET", url)).status, 200);
+  await editProfile(env, "owner", (p) => { p.avatar = "female"; });
+  assert.equal((await call(env, "viewer", "GET", url)).status, 404);
+  assert.equal((await call(env, "owner", "GET", uploaded.data.url)).status, 200);
+  await editProfile(env, "owner", (p) => { p.avatar = uploaded.data.avatar; });
+  await ban(env, "owner");
+  assert.equal((await call(env, "viewer", "GET", url)).status, 404);
+  assert.equal((await call(env, "owner", "GET", uploaded.data.url)).status, 403);
+});
+
+test("a still-unexpired avatar URL stops working when its shared period closes", async (t) => {
+  let now = Date.UTC(2026, 10, 11, 7, 59);
+  t.mock.method(Date, "now", () => now);
+  const env = createEnv();
+  const uploaded = await upload(env, "owner");
+  await register(env, "owner", { avatar: uploaded.data.avatar });
+  await register(env, "viewer");
+  await checkin(env, "owner");
+  await checkin(env, "viewer");
+  const url = (await ciMembers(env, "viewer")).members[0].avatar_url;
+  assert.equal((await call(env, "viewer", "GET", url)).status, 200);
+  now += 2 * 60_000;
+  assert.equal((await call(env, "viewer", "GET", url)).status, 404);
+});
+
 const attempts = (env) => env.DB.sqlite.prepare("SELECT email_mac, attempted_at FROM avatar_upload_attempts").all();
 
 test("avatar uploads: 5 attempts per rolling 30 days, failed ones included", async () => {
@@ -728,7 +811,9 @@ test("avatars: switching is free and unlocked; the latest upload is kept; deleti
   }
   assert.equal(attempts(env).length, 1);
   assert.equal((await save("male")).status, 200);
-  assert.deepEqual((await call(env, "w", "GET", "/api/profile")).data.latest_upload, { avatar: up.data.avatar, url: `/api/avatars/${up.data.avatar.slice(7)}` });
+  const latest = (await call(env, "w", "GET", "/api/profile")).data.latest_upload;
+  assert.equal(latest.avatar, up.data.avatar);
+  assert.equal((await call(env, "w", "GET", latest.url)).status, 200);
   // A new upload replaces the unused one; the profile can still use the new one.
   const second = await upload(env, "w");
   assert.equal((await save(up.data.avatar)).status, 400); // the first was pruned

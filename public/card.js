@@ -1,4 +1,4 @@
-import { h } from "/lib.js";
+import { h, avatarImage } from "/lib.js";
 import { t, RELATIONS, FIELDS, PROGRAMS, GENDERS } from "/i18n.js";
 
 // A member card as filtered by the server: basic info and "about me" are always present; notes
@@ -12,7 +12,7 @@ export function personCard(m) {
   return h(
     "article",
     { class: "card" },
-    h("img", { class: "avatar", loading: "lazy", decoding: "async", src: m.avatar_url, alt: "" }),
+    avatarImage(m.avatar_url, { class: "avatar", loading: "lazy", decoding: "async" }),
     h("h3", {}, m.nickname),
     h("div", { class: "chips" }, m.common_relations.map((r) => h("span", { class: "chip tag" }, RELATIONS[r]))),
     h("p", { class: "small" }, `${GENDERS[m.gender] || m.gender} · ${PROGRAMS[m.program] || m.program}`),
